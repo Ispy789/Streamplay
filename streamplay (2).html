@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Streamplay</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #241626;
+    --bg-panel: #2f1c33;
+    --bg-card: #3a2440;
+    --bg-card-hover: #482c50;
+    --accent: #e0a458;
+    --accent-dim: #c98a3f;
+    --text: #f6ede0;
+    --text-dim: #b8a7bd;
+    --border: #4a3350;
+    --danger: #d9705f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 1fr 88px;
+    height: 100vh;
+  }
+  .sidebar {
+    background: #1a0f1c;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .logo {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo .disc {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, var(--bg-panel) 0 3px, var(--accent) 4px 100%);
+    display: inline-block;
+  }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .nav a.active, .nav a:hover { background: var(--bg-panel); color: var(--text); }
+  .playlists { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .playlists .heading { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 8px 10px 4px; }
+  .playlist-item {
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .playlist-item:hover { background: var(--bg-panel); color: var(--text); }
+
+  .account-box {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #1a0f1c;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex-shrink: 0;
+  }
+  .account-info { min-width: 0; flex: 1; }
+  .account-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .logout-link { font-size: 11px; color: var(--text-dim); cursor: pointer; }
+  .logout-link:hover { color: var(--accent); text-decoration: underline; }
+
+  .main { overflow-y: auto; padding: 24px 32px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 16px; }
+  .search {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 8px 16px;
+    width: 320px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .search:focus { outline: none; border-color: var(--accent-dim); }
+  .search::placeholder { color: var(--text-dim); }
+
+  .add-btn {
+    background: var(--accent);
+    color: #1a0f1c;
+    border: none;
+    border-radius: 20px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .add-btn:hover { background: var(--accent-dim); }
+
+  h2.section-title { font-size: 18px; margin: 28px 0 12px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .card:hover { background: var(--bg-card-hover); }
+  .art {
+    width: 100%; aspect-ratio: 1;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    color: rgba(255,255,255,0.85);
+    background-size: cover; background-position: center;
+  }
+  .card-title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+  .card-sub { font-size: 12px; color: var(--text-dim); margin: 0; }
+
+  .track-list { display: flex; flex-direction: column; margin-top: 8px; }
+  .track-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 110px 60px auto;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    gap: 12px;
+  }
+  .track-row:hover { background: var(--bg-panel); }
+  .track-row.playing { color: var(--accent); }
+  .track-num { color: var(--text-dim); font-size: 12px; }
+  .track-name { font-weight: 500; }
+  .track-artist { color: var(--text-dim); font-size: 12px; }
+  .track-album { color: var(--text-dim); font-size: 12px; }
+  .track-duration { color: var(--text-dim); font-size: 12px; text-align: right; }
+  .track-source {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 7px; border-radius: 10px; text-align: center;
+    color: var(--text-dim); border: 1px solid var(--border);
+  }
+  .track-remove {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 15px; padding: 2px 6px;
+  }
+  .track-remove:hover { color: var(--danger); }
+
+  .empty-state { color: var(--text-dim); font-size: 13px; padding: 20px 4px; }
+
+  .add-panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+  .add-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .add-tab {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  }
+  .add-tab.active { background: var(--accent); color: #1a0f1c; border-color: var(--accent); font-weight: 700; }
+  .add-row { display: flex; gap: 8px; }
+  .add-row input {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 9px 12px; color: var(--text); font-size: 13px;
+  }
+  .add-row input:focus { outline: none; border-color: var(--accent-dim); }
+  .add-row button {
+    background: var(--accent); color: #1a0f1c; border: none;
+    border-radius: 6px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+    white-space: nowrap;
+  }
+  .add-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .add-status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  .add-status.error { color: var(--danger); }
+  .add-status.ok { color: #8fbf8a; }
+
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-top: 14px; }
+  .result-card { background: var(--bg-card); border-radius: 8px; padding: 10px; }
+  .result-card img { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; margin-bottom: 8px; display: block; }
+  .result-title { font-size: 12px; font-weight: 600; margin: 0 0 2px; }
+  .result-sub { font-size: 11px; color: var(--text-dim); margin: 0 0 8px; }
+  .result-add {
+    width: 100%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px; font-size: 11px; cursor: pointer;
+  }
+  .result-add:hover { border-color: var(--accent); color: var(--accent); }
+  .result-add:disabled { opacity: 0.5; cursor: default; }
+
+  .player {
+    grid-column: 1 / -1;
+    background: #150c17;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    position: relative;
+  }
+  .now-playing { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .now-art { width: 48px; height: 48px; border-radius: 6px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; font-size:18px; background-size: cover; background-position: center; }
+  .now-info { min-width: 0; }
+  .now-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now-artist { font-size: 12px; color: var(--text-dim); }
+  .controls { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .buttons { display: flex; align-items: center; gap: 18px; }
+  .buttons button {
+    background: none; border: none; color: var(--text);
+    cursor: pointer; font-size: 16px; padding: 4px;
+  }
+  .play-btn {
+    background: var(--text) !important; color: #150c17 !important;
+    border-radius: 50%; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .progress-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+  .time { font-size: 11px; color: var(--text-dim); width: 32px; }
+  .time.right { text-align: right; }
+  .bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; position: relative; }
+  .bar-fill { height: 100%; background: var(--text); border-radius: 2px; width: 0%; }
+  .bar:hover .bar-fill { background: var(--accent); }
+  .volume { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .volume-bar { width: 90px; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; }
+  .volume-fill { height: 100%; width: 70%; background: var(--text); border-radius: 2px; }
+
+  #spotifyDock {
+    position: fixed; right: 16px; bottom: 96px;
+    width: 300px; background: #150c17; border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: none; z-index: 50;
+  }
+  #spotifyDock.show { display: block; }
+  #spotifyDock .dock-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px; font-size: 11px; color: var(--text-dim);
+  }
+  #spotifyDock .dock-head button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
+  #spotifyEmbedFrame { width: 100%; height: 152px; border: none; display: block; }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  #authOverlay {
+    position: fixed; inset: 0; background: rgba(20,10,22,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .auth-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 340px; }
+  .auth-card .logo { justify-content: center; margin-bottom: 20px; font-size: 24px; }
+  .auth-card h3 { margin: 0 0 4px; font-size: 15px; text-align: center; font-weight: 600; }
+  .auth-card p.sub { text-align: center; color: var(--text-dim); font-size: 12px; margin: 0 0 20px; }
+  .auth-field { margin-bottom: 12px; }
+  .auth-field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 5px; }
+  .auth-field input {
+    width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px; color: var(--text); font-size: 13px;
+  }
+  .auth-field input:focus { outline: none; border-color: var(--accent-dim); }
+  .auth-submit {
+    width: 100%; background: var(--accent); color: #1a0f1c; border: none;
+    border-radius: 20px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+    margin-top: 6px;
+  }
+  .auth-submit:hover { background: var(--accent-dim); }
+  .auth-switch { text-align: center; font-size: 12px; color: var(--text-dim); margin-top: 16px; }
+  .auth-switch span { color: var(--accent); cursor: pointer; }
+  .auth-error { color: var(--danger); font-size: 12px; text-align: center; min-height: 16px; margin-top: 4px; }
+  .auth-note { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div id="authOverlay">
+  <div class="auth-card">
+    <div class="logo"><span class="disc"></span>Streamplay</div>
+    <h3 id="authTitle">Log in</h3>
+    <p class="sub" id="authSub">Welcome back</p>
+    <button class="auth-submit" id="googleBtn" style="background:#fff; color:#1a0f1c; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:14px;">
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.5-6.5C35.2 2.5 30 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.6 5.9C12 13 17.5 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.9 7.2l7.5 5.8c4.4-4 6.9-9.9 6.9-17.5z"/><path fill="#FBBC05" d="M10.1 19.1c-.5 1.5-.8 3.1-.8 4.9s.3 3.4.8 4.9l-7.6 5.9C.9 31.7 0 27.9 0 24s.9-7.7 2.5-10.8z"/><path fill="#34A853" d="M24 48c6 0 11.2-2 14.9-5.3l-7.5-5.8c-2 1.4-4.6 2.2-7.4 2.2-6.5 0-12-4.5-13.9-10.6l-7.6 5.9C6.5 42.6 14.6 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+    <div class="auth-switch" style="margin:0 0 16px;">— or —</div>
+    <div class="auth-field" id="authNameField" style="display:none;">
+      <label>Display name</label>
+      <input id="authName" placeholder="e.g. Alex">
+    </div>
+    <div class="auth-field">
+      <label>Email</label>
+      <input id="authUser" type="email" placeholder="you@example.com">
+    </div>
+    <div class="auth-field">
+      <label>Password</label>
+      <input id="authPass" type="password" placeholder="••••••••">
+    </div>
+    <button class="auth-submit" id="authSubmitBtn">Log in</button>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-switch"><span id="authSwitchText"></span></div>
+    <div class="auth-note">Accounts are powered by Supabase Auth and stored securely on the server — not just in this browser.</div>
+  </div>
+</div>
+
+<div class="app">
+
+  <div class="sidebar">
+    <div class="logo"><span class="disc"></span>Streamplay</div>
+    <div class="nav">
+      <a class="nav-link active" data-view="home">Home</a>
+      <a class="nav-link" data-view="search">Search</a>
+      <a class="nav-link" data-view="library">Your library</a>
+      <a class="nav-link" data-view="admin" id="adminNavLink" style="display:none;">Admin</a>
+    </div>
+    <div class="playlists">
+      <div class="heading">Playlists</div>
+      <div class="playlist-item">Late Night Drive</div>
+      <div class="playlist-item">Focus Flow</div>
+      <div class="playlist-item">Sunday Morning</div>
+      <div class="playlist-item">Workout Mix</div>
+      <div class="playlist-item">Liked Songs</div>
+    </div>
+    <div class="account-box">
+      <div class="avatar" id="avatarInitial">?</div>
+      <div class="account-info">
+        <div class="account-name" id="accountName">Guest</div>
+        <div class="logout-link" id="logoutLink">Log out</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <input class="search" id="searchInput" placeholder="Search songs, artists, albums">
+      <button class="add-btn" id="goToAddBtn">+ Add music</button>
+    </div>
+    <div id="mainContent"></div>
+  </div>
+
+  <div class="player">
+    <div class="now-playing">
+      <div class="now-art" id="nowArt"></div>
+      <div class="now-info">
+        <div class="now-title" id="nowTitle">Nothing playing</div>
+        <div class="now-artist" id="nowArtist">Pick a track to start</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="buttons">
+        <button title="Previous">&#9198;</button>
+        <button class="play-btn" id="playBtn">&#9654;</button>
+        <button title="Next">&#9197;</button>
+      </div>
+      <div class="progress-row">
+        <span class="time" id="curTime">0:00</span>
+        <div class="bar" id="progressBar"><div class="bar-fill" id="progressFill"></div></div>
+        <span class="time right" id="totalTime">0:00</span>
+      </div>
+    </div>
+    <div class="volume">
+      <span style="font-size:14px;">&#128266;</span>
+      <div class="volume-bar" id="volumeBar"><div class="volume-fill" id="volumeFill"></div></div>
+    </div>
+
+    <div id="spotifyDock">
+      <div class="dock-head">
+        <span>Spotify Embed</span>
+        <button id="spotifyDockClose">&times;</button>
+      </div>
+      <iframe id="spotifyEmbedFrame" src="about:blank" allow="encrypted-media; autoplay"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0;"></div>
+<audio id="applePreviewAudio" preload="none"></audio>
+
+<script>
+/* MOCK CATALOG DATA (local, always available) */
+const colors = ['#e0a458','#7f9c96','#b06a6a','#8a7ab0','#5f9ea0','#c78a3f'];
+
+const mockAlbums = [
+  { name: 'Amber Skyline', artist: 'The Quiet Static', icon: '&#9835;' },
+  { name: 'Low Tide Sessions', artist: 'Marina Hale', icon: '&#127925;' },
+  { name: 'Concrete Bloom', artist: 'Ferro & the Drift', icon: '&#127926;' },
+  { name: 'Paper Moths', artist: 'Odille', icon: '&#9834;' },
+  { name: 'Half Light', artist: 'Coast Radio', icon: '&#127911;' },
+  { name: 'Analog Heart', artist: 'The Quiet Static', icon: '&#127932;' },
+];
+
+const mockTracks = [
+  { id: 'm1', source: 'local', name: 'Amber Skyline', artist: 'The Quiet Static', album: 'Amber Skyline', duration: 214, color: colors[0] },
+  { id: 'm2', source: 'local', name: 'Salt & Static', artist: 'Marina Hale', album: 'Low Tide Sessions', duration: 187, color: colors[1] },
+  { id: 'm3', source: 'local', name: 'Concrete Bloom', artist: 'Ferro & the Drift', album: 'Concrete Bloom', duration: 251, color: colors[2] },
+  { id: 'm4', source: 'local', name: 'Wingspan', artist: 'Odille', album: 'Paper Moths', duration: 198, color: colors[3] },
+  { id: 'm5', source: 'local', name: 'Half Light', artist: 'Coast Radio', album: 'Half Light', duration: 233, color: colors[4] },
+  { id: 'm6', source: 'local', name: 'Tape Loop', artist: 'The Quiet Static', album: 'Analog Heart', duration: 176, color: colors[5] },
+  { id: 'm7', source: 'local', name: 'Harbor Static', artist: 'Marina Hale', album: 'Low Tide Sessions', duration: 205, color: colors[1] },
+  { id: 'm8', source: 'local', name: 'Slow Ferris', artist: 'Odille', album: 'Paper Moths', duration: 221, color: colors[3] },
+];
+
+function formatTime(s) {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   SUPABASE CONFIG — fill in SUPABASE_URL below.
+   Find it in: Supabase Dashboard -> Project Settings -> API -> Project URL
+   The anon/publishable key below is safe to expose in client code.
+   ============================================================ */
+const SUPABASE_URL = 'https://fiskbsvqvuejrrpxekvh.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_nDTFikSwYqQtCf9oEvwHxQ_ZbDMHzdG';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ACCOUNTS (real Supabase Auth — email/password + Google OAuth) */
+let authMode = 'login';
+let currentUser = null;   // Supabase auth user object
+let currentProfile = null; // row from public.profiles (display_name, role)
+const authOverlay = document.getElementById('authOverlay');
+const authTitle = document.getElementById('authTitle');
+const authSub = document.getElementById('authSub');
+const authNameField = document.getElementById('authNameField');
+const authName = document.getElementById('authName');
+const authUser = document.getElementById('authUser');
+const authPass = document.getElementById('authPass');
+const authError = document.getElementById('authError');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const authSwitchText = document.getElementById('authSwitchText');
+
+function renderAuthMode() {
+  authError.textContent = '';
+  if (authMode === 'login') {
+    authTitle.textContent = 'Log in';
+    authSub.textContent = 'Welcome back';
+    authNameField.style.display = 'none';
+    authSubmitBtn.textContent = 'Log in';
+    authSwitchText.innerHTML = 'Don\'t have an account? <span id="authSwitchLink">Sign up</span>';
+  } else {
+    authTitle.textContent = 'Create your account';
+    authSub.textContent = 'Set up Streamplay in this browser';
+    authNameField.style.display = 'block';
+    authSubmitBtn.textContent = 'Sign up';
+    authSwitchText.innerHTML = 'Already have an account? <span id="authSwitchLink">Log in</span>';
+  }
+  document.getElementById('authSwitchLink').onclick = () => {
+    authMode = authMode === 'login' ? 'signup' : 'login';
+    renderAuthMode();
+  };
+}
+renderAuthMode();
+
+authSubmitBtn.onclick = async () => {
+  const email = authUser.value.trim();
+  const pass = authPass.value;
+  authError.textContent = '';
+  if (!email || !pass) { authError.textContent = 'Please fill in email and password.'; return; }
+
+  authSubmitBtn.disabled = true;
+  const originalLabel = authSubmitBtn.textContent;
+  authSubmitBtn.textContent = 'Please wait...';
+
+  try {
+    if (authMode === 'signup') {
+      const displayName = authName.value.trim() || email.split('@')[0];
+      const { data, error } = await supabaseClient.auth.signUp({
+        email, password: pass,
+        options: { data: { full_name: displayName } }
+      });
+      if (error) throw error;
+      if (data.user && !data.session) {
+        authError.textContent = '';
+        authError.style.color = '#8fbf8a';
+        authError.textContent = 'Check your email to confirm your account, then log in.';
+        authMode = 'login';
+        renderAuthMode();
+      }
+      // if email confirmation is disabled in your Supabase project, data.session
+      // will already be set and onAuthStateChange below will start the app.
+    } else {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+    }
+  } catch (err) {
+    authError.style.color = '';
+    authError.textContent = err.message || 'Something went wrong. Please try again.';
+  } finally {
+    authSubmitBtn.disabled = false;
+    authSubmitBtn.textContent = originalLabel;
+  }
+};
+[authUser, authPass, authName].forEach(el => {
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') authSubmitBtn.click(); });
+});
+
+document.getElementById('googleBtn').onclick = async () => {
+  authError.textContent = '';
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href }
+  });
+  if (error) authError.textContent = error.message;
+};
+
+document.getElementById('logoutLink').onclick = async () => {
+  await supabaseClient.auth.signOut();
+  location.reload();
+};
+
+/* Reacts to sign-in / sign-out / token refresh from Supabase Auth,
+   including the redirect back from Google OAuth. */
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (session && session.user) {
+    startApp(session.user);
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    currentProfile = null;
+  }
+});
+
+/* PER-USER LIBRARY STORAGE (local per browser; swap for a Supabase table later if you want it synced across devices) */
+function libKey() { return 'streamplay_library_' + (currentUser ? currentUser.id : 'anon'); }
+function likedKey() { return 'streamplay_liked_' + (currentUser ? currentUser.id : 'anon'); }
+
+function loadLibrary() { try { return JSON.parse(localStorage.getItem(libKey())) || []; } catch(e) { return []; } }
+function saveLibrary(list) { localStorage.setItem(libKey(), JSON.stringify(list)); }
+function loadLiked() { try { return JSON.parse(localStorage.getItem(likedKey())) || []; } catch(e) { return []; } }
+function saveLiked(ids) { localStorage.setItem(likedKey(), JSON.stringify(ids)); }
+function allTracks() { return mockTracks.concat(loadLibrary()); }
+
+/* VIEW / NAV STATE */
+let currentView = 'home';
+const mainContent = document.getElementById('mainContent');
+const searchInput = document.getElementById('searchInput');
+
+document.querySelectorAll('.nav-link').forEach(link => {
+  link.addEventListener('click', () => {
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+    currentView = link.dataset.view;
+    searchInput.value = '';
+    renderView();
+    if (currentView === 'search') searchInput.focus();
+  });
+});
+
+document.getElementById('goToAddBtn').onclick = () => {
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.querySelector('.nav-link[data-view="library"]').classList.add('active');
+  currentView = 'library';
+  renderView();
+};
+
+function renderView() {
+  if (searchInput.value.trim()) { renderSearchResults(searchInput.value.trim()); return; }
+  if (currentView === 'home') renderHome();
+  else if (currentView === 'search') renderSearchEmpty();
+  else if (currentView === 'library') renderLibrary();
+  else if (currentView === 'admin') renderAdmin();
+}
+
+function renderHome() {
+  const albumGridHtml = mockAlbums.map((a, i) => `
+    <div class="card" data-album="${escapeHtml(a.name)}">
+      <div class="art" style="background:${colors[i % colors.length]}">${a.icon}</div>
+      <p class="card-title">${escapeHtml(a.name)}</p><p class="card-sub">${escapeHtml(a.artist)}</p>
+    </div>`).join('');
+
+  mainContent.innerHTML = `
+    <div class="add-panel" style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
+      <div>
+        <p class="card-title" style="margin:0 0 4px;">Streamplay AI</p>
+        <p class="card-sub" style="margin:0;">Get picks based on what you've liked and added, like a "for you" mix.</p>
+      </div>
+      <button class="add-btn" id="aiRecommendBtn">Get AI picks</button>
+    </div>
+    <div id="aiRecommendStatus" class="add-status" style="margin:-14px 0 14px;"></div>
+    <div class="result-grid" id="aiRecommendGrid"></div>
+
+    <h2 class="section-title">Made for you</h2>
+    <div class="grid" id="albumGrid">${albumGridHtml}</div>
+    <h2 class="section-title">Popular tracks</h2>
+    <div class="track-list" id="trackList"></div>
+  `;
+
+  mainContent.querySelectorAll('.card').forEach(card => {
+    card.onclick = () => {
+      const albumName = card.dataset.album;
+      const match = mockTracks.find(t => t.album === albumName);
+      if (match) playTrack(match);
+    };
+  });
+
+  renderTrackList(document.getElementById('trackList'), mockTracks);
+  document.getElementById('aiRecommendBtn').onclick = fetchAIRecommendations;
+}
+
+async function fetchAIRecommendations() {
+  const statusEl = document.getElementById('aiRecommendStatus');
+  const gridEl = document.getElementById('aiRecommendGrid');
+  statusEl.className = 'add-status';
+  statusEl.textContent = 'Streamplay AI is thinking...';
+  gridEl.innerHTML = '';
+
+  const likedIds = loadLiked();
+  const seedTracks = allTracks().filter(t => likedIds.includes(t.id)).concat(loadLibrary());
+  const payload = seedTracks.slice(0, 25).map(t => ({ name: t.name, artist: t.artist }));
+
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { tracks: payload }
+    });
+    if (error) throw error;
+    const recs = (data && data.recommendations) || [];
+    if (recs.length === 0) {
+      statusEl.textContent = 'No recommendations came back. Like or add a few songs first, then try again.';
+      return;
+    }
+    statusEl.textContent = '';
+    gridEl.innerHTML = recs.map((r, i) => `
+      <div class="result-card">
+        <div class="art" style="background:${colors[i % colors.length]}; aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center; margin-bottom:8px; font-size:20px;">&#9835;</div>
+        <p class="result-title">${escapeHtml(r.name)}</p>
+        <p class="result-sub">${escapeHtml(r.artist)}</p>
+        <button class="result-add" data-idx="${i}">+ Find & add</button>
+      </div>
+    `).join('');
+    gridEl.querySelectorAll('.result-add').forEach(btn => {
+      btn.onclick = async () => {
+        const r = recs[parseInt(btn.dataset.idx, 10)];
+        btn.disabled = true;
+        btn.textContent = 'Searching...';
+        try {
+          const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(r.name + ' ' + r.artist)}&media=music&entity=song&limit=1`);
+          const data2 = await res.json();
+          const hit = (data2.results || [])[0];
+          if (hit && hit.previewUrl) {
+            addToLibrary({
+              id: 'am_' + hit.trackId, source: 'apple', previewUrl: hit.previewUrl,
+              name: hit.trackName, artist: hit.artistName, album: hit.collectionName || 'Apple Music',
+              duration: Math.min(30, Math.round((hit.trackTimeMillis || 30000) / 1000)),
+              thumbnail: hit.artworkUrl100
+            });
+            btn.textContent = 'Added ✓';
+          } else {
+            btn.textContent = 'Not found';
+          }
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = 'Try again';
+        }
+      };
+    });
+  } catch (err) {
+    statusEl.className = 'add-status error';
+    statusEl.textContent = 'Could not reach Streamplay AI. Make sure the Edge Function is deployed. (' + (err.message || err) + ')';
+  }
+}
+
+function renderSearchEmpty() {
+  mainContent.innerHTML = `
+    <h2 class="section-title">Search</h2>
+    <p class="empty-state">Start typing above to search your local catalog and everything you've added from YouTube, Spotify, and Apple Music.</p>
+  `;
+}
+function renderSearchResults(query) {
+  const q = query.toLowerCase();
+  const results = allTracks().filter(t =>
+    t.name.toLowerCase().includes(q) ||
+    t.artist.toLowerCase().includes(q) ||
+    (t.album || '').toLowerCase().includes(q)
+  );
+  mainContent.innerHTML = `<h2 class="section-title">Results for "${escapeHtml(query)}"</h2><div class="track-list" id="trackList"></div>`;
+  const listEl = document.getElementById('trackList');
+  if (results.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No matches. Try a different search, or add this song from YouTube, Spotify, or Apple Music via "Your library".</div>`;
+    return;
+  }
+  renderTrackList(listEl, results);
+}
+searchInput.addEventListener('input', () => renderView());
+
+let addTab = 'link';
+
+function renderLibrary() {
+  const library = loadLibrary();
+  const likedIds = loadLiked();
+  const likedTracks = allTracks().filter(t => likedIds.includes(t.id));
+
+  mainContent.innerHTML = `
+    <h2 class="section-title">Add music</h2>
+    <div class="add-panel">
+      <div class="add-tabs">
+        <button class="add-tab ${addTab === 'link' ? 'active' : ''}" id="tabLink">Paste YouTube / Spotify link</button>
+        <button class="add-tab ${addTab === 'apple' ? 'active' : ''}" id="tabApple">Search Apple Music</button>
+      </div>
+      <div id="addPanelBody"></div>
+    </div>
+
+    <h2 class="section-title">Liked Songs</h2>
+    <div class="track-list" id="likedList"></div>
+
+    <h2 class="section-title">Imported tracks (${library.length})</h2>
+    <div class="track-list" id="libraryList"></div>
+  `;
+
+  document.getElementById('tabLink').onclick = () => { addTab = 'link'; renderLibrary(); };
+  document.getElementById('tabApple').onclick = () => { addTab = 'apple'; renderLibrary(); };
+  renderAddPanelBody();
+
+  const likedListEl = document.getElementById('likedList');
+  if (likedTracks.length === 0) {
+    likedListEl.innerHTML = `<div class="empty-state">Nothing liked yet — heart a track to save it here.</div>`;
+  } else {
+    renderTrackList(likedListEl, likedTracks, { removable: false });
+  }
+
+  const libListEl = document.getElementById('libraryList');
+  if (library.length === 0) {
+    libListEl.innerHTML = `<div class="empty-state">No imported tracks yet. Use the panel above to pull songs in from YouTube, Spotify, or Apple Music.</div>`;
+  } else {
+    renderTrackList(libListEl, library, { removable: true });
+  }
+}
+
+function renderAddPanelBody() {
+  const body = document.getElementById('addPanelBody');
+  if (addTab === 'link') {
+    body.innerHTML = `
+      <div class="add-row">
+        <input id="linkInput" placeholder="Paste a YouTube or Spotify track/video URL...">
+        <button id="linkFetchBtn">Add</button>
+      </div>
+      <div class="add-hint">YouTube links play in full via YouTube's embedded player. Spotify links play via Spotify's official embed widget (30s preview, or full track if you're logged into Spotify in this browser).</div>
+      <div class="add-status" id="linkStatus"></div>
+    `;
+    document.getElementById('linkFetchBtn').onclick = handleLinkAdd;
+    document.getElementById('linkInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleLinkAdd(); });
+  } else {
+    body.innerHTML = `
+      <div class="add-row">
+        <input id="appleQuery" placeholder="Search song or artist on Apple Music...">
+        <button id="appleSearchBtn">Search</button>
+      </div>
+      <div class="add-hint">Uses Apple's public iTunes Search API. Adds a real 30-second preview clip you can play right in Streamplay.</div>
+      <div class="add-status" id="appleStatus"></div>
+      <div class="result-grid" id="appleResults"></div>
+    `;
+    document.getElementById('appleSearchBtn').onclick = handleAppleSearch;
+    document.getElementById('appleQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleAppleSearch(); });
+  }
+}
+
+async function renderAdmin() {
+  mainContent.innerHTML = `<h2 class="section-title">Admin dashboard</h2><p class="empty-state">Loading...</p>`;
+  if (!currentProfile || currentProfile.role !== 'admin') {
+    mainContent.innerHTML = `<h2 class="section-title">Admin dashboard</h2><p class="empty-state">You don't have admin access on this account.</p>`;
+    return;
+  }
+
+  const [profilesRes, eventsRes, aiRes] = await Promise.all([
+    supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }),
+    supabaseClient.from('listening_events').select('*').order('played_at', { ascending: false }).limit(50),
+    supabaseClient.from('ai_usage_log').select('*').order('created_at', { ascending: false }).limit(50),
+  ]);
+
+  const profiles = profilesRes.data || [];
+  const events = eventsRes.data || [];
+  const aiLogs = aiRes.data || [];
+  const nameFor = (id) => (profiles.find(p => p.id === id) || {}).display_name || (profiles.find(p => p.id === id) || {}).email || id;
+
+  mainContent.innerHTML = `
+    <h2 class="section-title">Admin dashboard</h2>
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 8px;">
+      <div class="card" style="cursor:default;"><p class="card-title">${profiles.length}</p><p class="card-sub">Total users</p></div>
+      <div class="card" style="cursor:default;"><p class="card-title">${events.length}</p><p class="card-sub">Recent plays logged</p></div>
+      <div class="card" style="cursor:default;"><p class="card-title">${aiLogs.length}</p><p class="card-sub">Recent AI requests</p></div>
+    </div>
+
+    <h2 class="section-title">Users</h2>
+    <div class="track-list">
+      ${profiles.map(p => `
+        <div class="track-row" style="grid-template-columns: 1fr 160px 140px; cursor:default;">
+          <span><div class="track-name">${escapeHtml(p.display_name || '(no name)')}</div><div class="track-artist">${escapeHtml(p.email || '')}</div></span>
+          <span class="track-album">${escapeHtml(p.role)}</span>
+          <span class="track-duration" style="text-align:left;">${new Date(p.created_at).toLocaleDateString()}</span>
+        </div>
+      `).join('') || '<div class="empty-state">No users yet.</div>'}
+    </div>
+
+    <h2 class="section-title">Recent listening activity</h2>
+    <div class="track-list">
+      ${events.map(e => `
+        <div class="track-row" style="grid-template-columns: 1fr 140px 140px 160px; cursor:default;">
+          <span><div class="track-name">${escapeHtml(e.track_name)}</div><div class="track-artist">${escapeHtml(e.artist || '')}</div></span>
+          <span class="track-album">${escapeHtml(nameFor(e.user_id))}</span>
+          <span class="track-source" style="text-align:center;">${escapeHtml(e.source || '')}</span>
+          <span class="track-duration" style="text-align:left;">${new Date(e.played_at).toLocaleString()}</span>
+        </div>
+      `).join('') || '<div class="empty-state">No listening activity yet.</div>'}
+    </div>
+
+    <h2 class="section-title">Streamplay AI usage</h2>
+    <div class="track-list">
+      ${aiLogs.map(a => `
+        <div class="track-row" style="grid-template-columns: 1fr 120px 160px; cursor:default;">
+          <span class="track-name">${escapeHtml(nameFor(a.user_id))}</span>
+          <span class="track-album">${a.recommended_count} tracks</span>
+          <span class="track-duration" style="text-align:left;">${new Date(a.created_at).toLocaleString()}</span>
+        </div>
+      `).join('') || '<div class="empty-state">No AI requests yet.</div>'}
+    </div>
+  `;
+}
+
+function setStatus(elId, msg, cls) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'add-status' + (cls ? ' ' + cls : '');
+}
+
+async function handleLinkAdd() {
+  const input = document.getElementById('linkInput');
+  const url = input.value.trim();
+  if (!url) return;
+  setStatus('linkStatus', 'Looking that up...', '');
+
+  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{6,})/);
+  const spMatch = url.match(/open\.spotify\.com\/(?:intl-\w+\/)?track\/([A-Za-z0-9]+)/);
+
+  try {
+    if (ytMatch) {
+      const videoId = ytMatch[1];
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`);
+      if (!res.ok) throw new Error('YouTube lookup failed');
+      const data = await res.json();
+      const track = {
+        id: 'yt_' + videoId,
+        source: 'youtube',
+        videoId,
+        name: data.title || 'YouTube video',
+        artist: data.author_name || 'YouTube',
+        album: 'YouTube',
+        duration: 0,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+      };
+      addToLibrary(track);
+      setStatus('linkStatus', `Added "${track.name}" from YouTube.`, 'ok');
+      input.value = '';
+    } else if (spMatch) {
+      const trackId = spMatch[1];
+      const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error('Spotify lookup failed');
+      const data = await res.json();
+      let title = data.title || 'Spotify track';
+      let artist = 'Spotify';
+      if (title.includes(' - ')) {
+        const parts = title.split(' - ');
+        artist = parts[0];
+        title = parts.slice(1).join(' - ');
+      } else if (data.provider_name) {
+        artist = data.provider_name;
+      }
+      const track = {
+        id: 'sp_' + trackId,
+        source: 'spotify',
+        trackId,
+        name: title,
+        artist,
+        album: 'Spotify',
+        duration: 0,
+        thumbnail: data.thumbnail_url || ''
+      };
+      addToLibrary(track);
+      setStatus('linkStatus', `Added "${track.name}" from Spotify.`, 'ok');
+      input.value = '';
+    } else {
+      setStatus('linkStatus', "That doesn't look like a YouTube or Spotify track link. Paste a full URL, e.g. https://www.youtube.com/watch?v=... or https://open.spotify.com/track/...", 'error');
+    }
+  } catch (err) {
+    setStatus('linkStatus', 'Could not fetch that link. Check the URL and your connection, then try again.', 'error');
+  }
+}
+
+async function handleAppleSearch() {
+  const q = document.getElementById('appleQuery').value.trim();
+  if (!q) return;
+  setStatus('appleStatus', 'Searching Apple Music...', '');
+  document.getElementById('appleResults').innerHTML = '';
+  try {
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=12`);
+    if (!res.ok) throw new Error('Search failed');
+    const data = await res.json();
+    const results = (data.results || []).filter(r => r.previewUrl);
+    if (results.length === 0) {
+      setStatus('appleStatus', 'No results with playable previews found.', 'error');
+      return;
+    }
+    setStatus('appleStatus', `Found ${results.length} track(s).`, 'ok');
+    const grid = document.getElementById('appleResults');
+    grid.innerHTML = results.map((r, i) => `
+      <div class="result-card">
+        <img src="${r.artworkUrl100}" alt="">
+        <p class="result-title">${escapeHtml(r.trackName)}</p>
+        <p class="result-sub">${escapeHtml(r.artistName)}</p>
+        <button class="result-add" data-idx="${i}">+ Add to library</button>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.result-add').forEach(btn => {
+      btn.onclick = () => {
+        const r = results[parseInt(btn.dataset.idx, 10)];
+        const secs = Math.round((r.trackTimeMillis || 30000) / 1000);
+        const track = {
+          id: 'am_' + r.trackId,
+          source: 'apple',
+          previewUrl: r.previewUrl,
+          name: r.trackName,
+          artist: r.artistName,
+          album: r.collectionName || 'Apple Music',
+          duration: secs > 30 ? 30 : secs,
+          thumbnail: r.artworkUrl100
+        };
+        addToLibrary(track);
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+      };
+    });
+  } catch (err) {
+    setStatus('appleStatus', 'Search failed. Check your connection and try again.', 'error');
+  }
+}
+
+function addToLibrary(track) {
+  const library = loadLibrary();
+  if (library.some(t => t.id === track.id)) return;
+  library.push(track);
+  saveLibrary(library);
+  if (currentView === 'library') renderLibrary();
+}
+
+function removeFromLibrary(id) {
+  let library = loadLibrary();
+  library = library.filter(t => t.id !== id);
+  saveLibrary(library);
+  renderLibrary();
+}
+
+function toggleLike(id) {
+  let liked = loadLiked();
+  if (liked.includes(id)) liked = liked.filter(x => x !== id);
+  else liked.push(id);
+  saveLiked(liked);
+  if (currentView === 'library') renderLibrary();
+}
+
+function renderTrackList(container, list, opts) {
+  opts = opts || {};
+  container.innerHTML = '';
+  const likedIds = loadLiked();
+  list.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'track-row';
+    const sourceLabel = t.source === 'local' ? '' : t.source;
+    const liked = likedIds.includes(t.id);
+    row.innerHTML = `
+      <span class="track-num">${i + 1}</span>
+      <span><div class="track-name">${escapeHtml(t.name)}</div><div class="track-artist">${escapeHtml(t.artist)}</div></span>
+      <span class="track-album">${escapeHtml(t.album || '')}</span>
+      <span class="track-duration">${t.duration ? formatTime(t.duration) : (sourceLabel ? '—' : '')}</span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        ${sourceLabel ? `<span class="track-source">${sourceLabel}</span>` : ''}
+        <button class="track-remove like-btn" title="Like">${liked ? '♥' : '♡'}</button>
+        ${opts.removable ? `<button class="track-remove remove-btn" title="Remove">&times;</button>` : ''}
+      </span>
+    `;
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn')) return;
+      playTrack(t);
+    });
+    row.querySelector('.like-btn').onclick = (e) => { e.stopPropagation(); toggleLike(t.id); };
+    if (opts.removable) {
+      row.querySelector('.remove-btn').onclick = (e) => { e.stopPropagation(); removeFromLibrary(t.id); };
+    }
+    container.appendChild(row);
+  });
+}
+
+/* PLAYBACK ENGINE (local / youtube / spotify / apple) */
+let current = null;
+let playing = false;
+let progressTimer = null;
+let mockElapsed = 0;
+
+const playBtn = document.getElementById('playBtn');
+const nowArt = document.getElementById('nowArt');
+const nowTitle = document.getElementById('nowTitle');
+const nowArtist = document.getElementById('nowArtist');
+const progressFill = document.getElementById('progressFill');
+const curTimeEl = document.getElementById('curTime');
+const totalTimeEl = document.getElementById('totalTime');
+const spotifyDock = document.getElementById('spotifyDock');
+const spotifyEmbedFrame = document.getElementById('spotifyEmbedFrame');
+const appleAudio = document.getElementById('applePreviewAudio');
+
+document.getElementById('spotifyDockClose').onclick = () => {
+  spotifyDock.classList.remove('show');
+  if (current && current.source === 'spotify') setPlaying(false);
+};
+
+let ytPlayer = null;
+let ytReady = false;
+let ytPendingVideoId = null;
+(function loadYT() {
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+})();
+window.onYouTubeIframeAPIReady = function() {
+  ytPlayer = new YT.Player('ytPlayerHolder', {
+    height: '1', width: '1',
+    playerVars: { playsinline: 1 },
+    events: {
+      onReady: () => {
+        ytReady = true;
+        if (ytPendingVideoId) { ytPlayer.loadVideoById(ytPendingVideoId); ytPendingVideoId = null; }
+      },
+      onStateChange: onYTStateChange
+    }
+  });
+};
+function onYTStateChange(e) {
+  if (!current || current.source !== 'youtube') return;
+  if (e.data === YT.PlayerState.PLAYING) {
+    playing = true;
+    playBtn.innerHTML = '&#10073;&#10073;';
+    const dur = ytPlayer.getDuration();
+    if (dur) totalTimeEl.textContent = formatTime(dur);
+    startProgressPolling();
+  } else if (e.data === YT.PlayerState.PAUSED) {
+    playing = false;
+    playBtn.innerHTML = '&#9654;';
+    stopProgressPolling();
+  } else if (e.data === YT.PlayerState.ENDED) {
+    playing = false;
+    playBtn.innerHTML = '&#9654;';
+    stopProgressPolling();
+    progressFill.style.width = '0%';
+    curTimeEl.textContent = '0:00';
+  }
+}
+
+let spotifyController = null;
+let spotifyIFrameAPI = null;
+(function loadSpotifyAPI() {
+  const tag = document.createElement('script');
+  tag.src = 'https://open.spotify.com/embed/iframe-api/v1';
+  tag.async = true;
+  document.head.appendChild(tag);
+})();
+window.onSpotifyIframeApiReady = (IFrameAPI) => { spotifyIFrameAPI = IFrameAPI; };
+function mountSpotify(trackId) {
+  spotifyDock.classList.add('show');
+  if (!spotifyIFrameAPI) {
+    spotifyEmbedFrame.src = `https://open.spotify.com/embed/track/${trackId}?utm_source=generator&autoplay=1`;
+    return;
+  }
+  const options = { uri: 'spotify:track:' + trackId };
+  spotifyIFrameAPI.createController(spotifyEmbedFrame, options, (controller) => {
+    spotifyController = controller;
+    controller.addListener('ready', () => { controller.play(); });
+    controller.addListener('playback_update', (e) => {
+      if (!current || current.source !== 'spotify') return;
+      playing = !e.data.isPaused;
+      playBtn.innerHTML = playing ? '&#10073;&#10073;' : '&#9654;';
+      const pos = e.data.position / 1000;
+      const dur = e.data.duration / 1000;
+      if (dur) totalTimeEl.textContent = formatTime(dur);
+      curTimeEl.textContent = formatTime(pos);
+      progressFill.style.width = dur ? ((pos / dur) * 100) + '%' : '0%';
+    });
+  });
+}
+
+appleAudio.addEventListener('timeupdate', () => {
+  if (!current || current.source !== 'apple') return;
+  curTimeEl.textContent = formatTime(appleAudio.currentTime);
+  const dur = appleAudio.duration || current.duration || 30;
+  progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
+});
+appleAudio.addEventListener('ended', () => {
+  if (!current || current.source !== 'apple') return;
+  setPlaying(false);
+  progressFill.style.width = '0%';
+  curTimeEl.textContent = '0:00';
+});
+
+function startProgressPolling() {
+  stopProgressPolling();
+  progressTimer = setInterval(() => {
+    if (!current || current.source !== 'youtube' || !ytPlayer || !ytPlayer.getCurrentTime) return;
+    const cur = ytPlayer.getCurrentTime();
+    const dur = ytPlayer.getDuration();
+    curTimeEl.textContent = formatTime(cur);
+    if (dur) {
+      totalTimeEl.textContent = formatTime(dur);
+      progressFill.style.width = ((cur / dur) * 100) + '%';
+    }
+  }, 500);
+}
+function stopProgressPolling() { clearInterval(progressTimer); }
+
+function stopAllPlayback() {
+  clearInterval(progressTimer);
+  clearInterval(window._mockTimer);
+  if (ytPlayer && ytPlayer.pauseVideo) { try { ytPlayer.pauseVideo(); } catch(e){} }
+  if (spotifyController) { try { spotifyController.pause(); } catch(e){} }
+  appleAudio.pause();
+  spotifyDock.classList.remove('show');
+}
+
+function playTrack(t) {
+  stopAllPlayback();
+  current = t;
+  mockElapsed = 0;
+  logListeningEvent(t);
+
+  if (t.thumbnail) {
+    nowArt.style.background = `center/cover no-repeat url(${t.thumbnail})`;
+    nowArt.innerHTML = '';
+  } else {
+    nowArt.style.background = t.color || '#7f9c96';
+    nowArt.innerHTML = '&#9835;';
+  }
+  nowTitle.textContent = t.name;
+  nowArtist.textContent = t.artist;
+  curTimeEl.textContent = '0:00';
+  totalTimeEl.textContent = t.duration ? formatTime(t.duration) : '0:00';
+  progressFill.style.width = '0%';
+
+  if (t.source === 'local') {
+    setPlaying(true);
+  } else if (t.source === 'youtube') {
+    if (ytReady && ytPlayer) { ytPlayer.loadVideoById(t.videoId); }
+    else { ytPendingVideoId = t.videoId; }
+    playing = true;
+    playBtn.innerHTML = '&#10073;&#10073;';
+  } else if (t.source === 'spotify') {
+    mountSpotify(t.trackId);
+    playing = true;
+    playBtn.innerHTML = '&#10073;&#10073;';
+  } else if (t.source === 'apple') {
+    appleAudio.src = t.previewUrl;
+    appleAudio.currentTime = 0;
+    appleAudio.play();
+    playing = true;
+    playBtn.innerHTML = '&#10073;&#10073;';
+  }
+}
+
+function logListeningEvent(t) {
+  if (!currentUser) return;
+  supabaseClient.from('listening_events').insert({
+    user_id: currentUser.id,
+    track_name: t.name,
+    artist: t.artist,
+    source: t.source
+  }).then(({ error }) => { if (error) console.warn('Could not log listening event:', error.message); });
+}
+
+function setPlaying(state) {
+  playing = state;
+  playBtn.innerHTML = playing ? '&#10073;&#10073;' : '&#9654;';
+  if (!current) return;
+
+  if (current.source === 'local') {
+    clearInterval(window._mockTimer);
+    if (playing) {
+      window._mockTimer = setInterval(() => {
+        mockElapsed += 1;
+        if (mockElapsed >= current.duration) {
+          mockElapsed = 0;
+          setPlaying(false);
+        }
+        curTimeEl.textContent = formatTime(mockElapsed);
+        progressFill.style.width = (mockElapsed / current.duration * 100) + '%';
+      }, 1000);
+    }
+  } else if (current.source === 'youtube' && ytPlayer) {
+    if (playing) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
+  } else if (current.source === 'spotify' && spotifyController) {
+    if (playing) spotifyController.resume(); else spotifyController.pause();
+  } else if (current.source === 'apple') {
+    if (playing) appleAudio.play(); else appleAudio.pause();
+  }
+}
+
+playBtn.onclick = () => { if (current) setPlaying(!playing); };
+
+document.getElementById('progressBar').onclick = (e) => {
+  if (!current) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+
+  if (current.source === 'local') {
+    mockElapsed = Math.floor(pct * current.duration);
+    curTimeEl.textContent = formatTime(mockElapsed);
+    progressFill.style.width = (pct * 100) + '%';
+  } else if (current.source === 'youtube' && ytPlayer && ytPlayer.getDuration) {
+    const dur = ytPlayer.getDuration();
+    if (dur) ytPlayer.seekTo(pct * dur, true);
+  } else if (current.source === 'apple') {
+    const dur = appleAudio.duration || current.duration || 30;
+    appleAudio.currentTime = pct * dur;
+  }
+  // Spotify embed seeking isn't exposed by the public Embed API; use its own widget controls in the dock for that.
+};
+
+const volumeBar = document.getElementById('volumeBar');
+const volumeFill = document.getElementById('volumeFill');
+volumeBar.onclick = (e) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  volumeFill.style.width = (pct * 100) + '%';
+  appleAudio.volume = pct;
+  if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(pct * 100);
+};
+
+/* APP BOOTSTRAP */
+let appStarted = false;
+
+async function startApp(user) {
+  currentUser = user;
+
+  // Fetch (or wait for the trigger to create) this user's profile row.
+  let { data: profile } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    // Trigger may not have fired yet on a brand-new signup — create it here as a fallback.
+    const displayName = user.user_metadata?.full_name || user.email;
+    const { data: inserted } = await supabaseClient
+      .from('profiles')
+      .upsert({ id: user.id, email: user.email, display_name: displayName })
+      .select()
+      .maybeSingle();
+    profile = inserted;
+  }
+  currentProfile = profile;
+
+  const displayName = (profile && profile.display_name) || user.email || 'You';
+  document.getElementById('accountName').textContent = displayName;
+  document.getElementById('avatarInitial').textContent = displayName.trim().charAt(0).toUpperCase() || '?';
+  document.getElementById('adminNavLink').style.display = (profile && profile.role === 'admin') ? '' : 'none';
+
+  authOverlay.style.display = 'none';
+  if (!appStarted) { appStarted = true; renderView(); }
+  else if (currentView === 'admin') { renderView(); } // refresh admin data if already viewing it
+}
+
+/* On page load, check for an existing Supabase session (also handles the
+   redirect back from Google OAuth, which onAuthStateChange picks up too). */
+supabaseClient.auth.getSession().then(({ data: { session } }) => {
+  if (session && session.user) startApp(session.user);
+});
+</script>
+</body>
+</html>
