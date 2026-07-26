@@ -325,6 +325,8 @@
     <div class="auth-error" id="authError"></div>
     <div class="auth-switch"><span id="authSwitchText"></span></div>
     <div class="auth-note">Accounts are powered by Supabase Auth and stored securely on the server — not just in this browser.</div>
+    <div class="auth-switch" style="margin-top:10px;"><a href="#" id="guestBtn" style="color:var(--text-dim); text-decoration:underline;">Continue as guest</a></div>
+  </div>
 </div>
 
 <div id="onboardingOverlay" style="display:none; position:fixed; inset:0; background:rgba(20,10,22,0.92); align-items:center; justify-content:center; z-index:110;">
@@ -1125,117 +1127,6 @@ function setStatus(elId, msg, cls) {
   if (!el) return;
   el.textContent = msg;
   el.className = 'add-status' + (cls ? ' ' + cls : '');
-}
-
-async function handleLinkAdd() {
-  const input = document.getElementById('linkInput');
-  const url = input.value.trim();
-  if (!url) return;
-  setStatus('linkStatus', 'Looking that up...', '');
-
-  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{6,})/);
-  const spMatch = url.match(/open\.spotify\.com\/(?:intl-\w+\/)?track\/([A-Za-z0-9]+)/);
-
-  try {
-    if (ytMatch) {
-      const videoId = ytMatch[1];
-      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`);
-      if (!res.ok) throw new Error('YouTube lookup failed');
-      const data = await res.json();
-      const track = {
-        id: 'yt_' + videoId,
-        source: 'youtube',
-        videoId,
-        name: data.title || 'YouTube video',
-        artist: data.author_name || 'YouTube',
-        album: 'YouTube',
-        duration: 0,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-      };
-      addToLibrary(track);
-      setStatus('linkStatus', `Added "${track.name}" from YouTube.`, 'ok');
-      input.value = '';
-    } else if (spMatch) {
-      const trackId = spMatch[1];
-      const res = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`);
-      if (!res.ok) throw new Error('Spotify lookup failed');
-      const data = await res.json();
-      let title = data.title || 'Spotify track';
-      let artist = 'Spotify';
-      if (title.includes(' - ')) {
-        const parts = title.split(' - ');
-        artist = parts[0];
-        title = parts.slice(1).join(' - ');
-      } else if (data.provider_name) {
-        artist = data.provider_name;
-      }
-      const track = {
-        id: 'sp_' + trackId,
-        source: 'spotify',
-        trackId,
-        name: title,
-        artist,
-        album: 'Spotify',
-        duration: 0,
-        thumbnail: data.thumbnail_url || ''
-      };
-      addToLibrary(track);
-      setStatus('linkStatus', `Added "${track.name}" from Spotify.`, 'ok');
-      input.value = '';
-    } else {
-      setStatus('linkStatus', "That doesn't look like a YouTube or Spotify track link. Paste a full URL, e.g. https://www.youtube.com/watch?v=... or https://open.spotify.com/track/...", 'error');
-    }
-  } catch (err) {
-    setStatus('linkStatus', 'Could not fetch that link. Check the URL and your connection, then try again.', 'error');
-  }
-}
-
-async function handleAppleSearch() {
-  const q = document.getElementById('appleQuery').value.trim();
-  if (!q) return;
-  setStatus('appleStatus', 'Searching Apple Music...', '');
-  document.getElementById('appleResults').innerHTML = '';
-  try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=12`);
-    if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
-    const results = (data.results || []).filter(r => r.previewUrl);
-    if (results.length === 0) {
-      setStatus('appleStatus', 'No results with playable previews found.', 'error');
-      return;
-    }
-    setStatus('appleStatus', `Found ${results.length} track(s).`, 'ok');
-    const grid = document.getElementById('appleResults');
-    grid.innerHTML = results.map((r, i) => `
-      <div class="result-card">
-        <img src="${r.artworkUrl100}" alt="">
-        <p class="result-title">${escapeHtml(r.trackName)}</p>
-        <p class="result-sub">${escapeHtml(r.artistName)}</p>
-        <button class="result-add" data-idx="${i}">+ Add to library</button>
-      </div>
-    `).join('');
-    grid.querySelectorAll('.result-add').forEach(btn => {
-      btn.onclick = () => {
-        const r = results[parseInt(btn.dataset.idx, 10)];
-        const secs = Math.round((r.trackTimeMillis || 30000) / 1000);
-        const track = {
-          id: 'am_' + r.trackId,
-          source: 'apple',
-          previewUrl: r.previewUrl,
-          name: r.trackName,
-          artist: r.artistName,
-          album: r.collectionName || 'Apple Music',
-          duration: secs > 30 ? 30 : secs,
-          thumbnail: r.artworkUrl100
-        };
-        addToLibrary(track);
-        btn.disabled = true;
-        btn.textContent = 'Added ✓';
-      };
-    });
-  } catch (err) {
-    setStatus('appleStatus', 'Search failed. Check your connection and try again.', 'error');
-  }
 }
 
 async function handleYtccSearch() {
