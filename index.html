@@ -325,6 +325,19 @@
     <div class="auth-error" id="authError"></div>
     <div class="auth-switch"><span id="authSwitchText"></span></div>
     <div class="auth-note">Accounts are powered by Supabase Auth and stored securely on the server — not just in this browser.</div>
+</div>
+
+<div id="onboardingOverlay" style="display:none; position:fixed; inset:0; background:rgba(20,10,22,0.92); align-items:center; justify-content:center; z-index:110;">
+  <div class="auth-card">
+    <div class="logo"><span class="disc"></span>Streamplay</div>
+    <h3>Welcome to Streamplay!</h3>
+    <p class="sub">What should we call you?</p>
+    <div class="auth-field">
+      <label>Display name</label>
+      <input id="onboardingName" placeholder="e.g. Alex">
+    </div>
+    <button class="auth-submit" id="onboardingSaveBtn">Continue</button>
+    <div class="auth-error" id="onboardingError"></div>
   </div>
 </div>
 
@@ -340,11 +353,9 @@
     </div>
     <div class="playlists">
       <div class="heading">Playlists</div>
-      <div class="playlist-item">Late Night Drive</div>
-      <div class="playlist-item">Focus Flow</div>
-      <div class="playlist-item">Sunday Morning</div>
-      <div class="playlist-item">Workout Mix</div>
-      <div class="playlist-item">Liked Songs</div>
+      <div class="playlist-item" id="likedSongsLink">&#9825; Liked Songs</div>
+      <div class="playlist-item" id="newPlaylistBtn" style="color:var(--accent);">+ New Playlist</div>
+      <div id="sidebarPlaylistList"></div>
     </div>
     <div class="account-box">
       <div class="avatar" id="avatarInitial">?</div>
@@ -445,10 +456,27 @@ const SUPABASE_URL = 'https://fiskbsvqvuejrrpxekvh.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nDTFikSwYqQtCf9oEvwHxQ_ZbDMHzdG';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* YouTube Data API key — used only to SEARCH videos filtered to Creative
+   Commons license (royalty-free), then plays them via YouTube's own embedded
+   player (same as pasting a YouTube link). Get a key at
+   console.cloud.google.com -> APIs & Services -> Credentials -> Create
+   Credentials -> API key, then enable "YouTube Data API v3" for it, then
+   restrict the key to your website's URL (HTTP referrers) so nobody else
+   can use it. This is a plain API key, not OAuth — much simpler to set up. */
+const YOUTUBE_API_KEY = 'AIzaSyA_Nt0ucVkyXlvcnFCQXaegWFMXcUQcWEE';
+
+/* Jamendo API client ID — Jamendo hosts genuinely free, Creative Commons
+   licensed music (independent artists opted in to free distribution), and
+   returns full-length streamable mp3 URLs directly, no embed needed. Get a
+   free client ID at devportal.jamendo.com (Sign up -> Create an app), no
+   payment or approval wait required. */
+const JAMENDO_CLIENT_ID = 'YOUR_JAMENDO_CLIENT_ID';
+
 /* ACCOUNTS (real Supabase Auth — email/password + Google OAuth) */
 let authMode = 'login';
 let currentUser = null;   // Supabase auth user object
 let currentProfile = null; // row from public.profiles (display_name, role)
+let isGuest = false;
 const authOverlay = document.getElementById('authOverlay');
 const authTitle = document.getElementById('authTitle');
 const authSub = document.getElementById('authSub');
@@ -459,6 +487,29 @@ const authPass = document.getElementById('authPass');
 const authError = document.getElementById('authError');
 const authSubmitBtn = document.getElementById('authSubmitBtn');
 const authSwitchText = document.getElementById('authSwitchText');
+const onboardingOverlay = document.getElementById('onboardingOverlay');
+const onboardingName = document.getElementById('onboardingName');
+const onboardingError = document.getElementById('onboardingError');
+
+document.getElementById('onboardingSaveBtn').onclick = async () => {
+  const name = onboardingName.value.trim();
+  if (!name) { onboardingError.textContent = 'Please enter a name.'; return; }
+  const btn = document.getElementById('onboardingSaveBtn');
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Saving...';
+  const { data, error } = await supabaseClient.from('profiles')
+    .update({ display_name: name }).eq('id', currentUser.id).select().maybeSingle();
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+  if (error) { onboardingError.textContent = error.message || 'Could not save your name. Try again.'; return; }
+  currentProfile = data || currentProfile;
+  document.getElementById('accountName').textContent = name;
+  document.getElementById('avatarInitial').textContent = name.charAt(0).toUpperCase() || '?';
+  onboardingOverlay.style.display = 'none';
+  if (!appStarted) { appStarted = true; renderView(); }
+};
+onboardingName.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('onboardingSaveBtn').click(); });
 
 function renderAuthMode() {
   authError.textContent = '';
@@ -534,7 +585,20 @@ document.getElementById('googleBtn').onclick = async () => {
   if (error) authError.textContent = error.message;
 };
 
+document.getElementById('guestBtn').onclick = (e) => {
+  e.preventDefault();
+  isGuest = true;
+  currentUser = null;
+  currentProfile = null;
+  document.getElementById('accountName').textContent = 'Guest';
+  document.getElementById('avatarInitial').textContent = 'G';
+  document.getElementById('adminNavLink').style.display = 'none';
+  authOverlay.style.display = 'none';
+  if (!appStarted) { appStarted = true; renderView(); }
+};
+
 document.getElementById('logoutLink').onclick = async () => {
+  isGuest = false;
   await supabaseClient.auth.signOut();
   location.reload();
 };
@@ -553,6 +617,113 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 /* PER-USER LIBRARY STORAGE (local per browser; swap for a Supabase table later if you want it synced across devices) */
 function libKey() { return 'streamplay_library_' + (currentUser ? currentUser.id : 'anon'); }
 function likedKey() { return 'streamplay_liked_' + (currentUser ? currentUser.id : 'anon'); }
+function playlistsKey() { return 'streamplay_playlists_' + (currentUser ? currentUser.id : 'anon'); }
+
+function loadPlaylists() { try { return JSON.parse(localStorage.getItem(playlistsKey())) || []; } catch(e) { return []; } }
+function savePlaylists(list) { localStorage.setItem(playlistsKey(), JSON.stringify(list)); }
+
+function createPlaylist(name, initialTrackId) {
+  const list = loadPlaylists();
+  const playlist = { id: 'pl_' + Date.now(), name, trackIds: initialTrackId ? [initialTrackId] : [] };
+  list.push(playlist);
+  savePlaylists(list);
+  renderSidebarPlaylists();
+  return playlist;
+}
+
+function addTrackToPlaylist(playlistId, trackId) {
+  const list = loadPlaylists();
+  const playlist = list.find(p => p.id === playlistId);
+  if (!playlist) return;
+  if (!playlist.trackIds.includes(trackId)) playlist.trackIds.push(trackId);
+  savePlaylists(list);
+  if (currentView === 'playlist' && currentPlaylistId === playlistId) renderPlaylistView();
+}
+
+function removeTrackFromPlaylist(playlistId, trackId) {
+  const list = loadPlaylists();
+  const playlist = list.find(p => p.id === playlistId);
+  if (!playlist) return;
+  playlist.trackIds = playlist.trackIds.filter(id => id !== trackId);
+  savePlaylists(list);
+  renderPlaylistView();
+}
+
+function renderSidebarPlaylists() {
+  const container = document.getElementById('sidebarPlaylistList');
+  if (!container) return;
+  const list = loadPlaylists();
+  if (list.length === 0) {
+    container.innerHTML = `<div class="playlist-item" style="color:var(--text-dim); cursor:default;">No playlists yet</div>`;
+    return;
+  }
+  container.innerHTML = list.map(p => `<div class="playlist-item" data-playlist-id="${p.id}">${escapeHtml(p.name)}</div>`).join('');
+  container.querySelectorAll('.playlist-item').forEach(el => {
+    el.onclick = () => {
+      currentPlaylistId = el.dataset.playlistId;
+      currentView = 'playlist';
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      searchInput.value = '';
+      renderView();
+    };
+  });
+}
+
+document.getElementById('newPlaylistBtn').onclick = () => {
+  const name = prompt('Playlist name:');
+  if (!name || !name.trim()) return;
+  const playlist = createPlaylist(name.trim());
+  currentPlaylistId = playlist.id;
+  currentView = 'playlist';
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  searchInput.value = '';
+  renderView();
+};
+
+document.getElementById('likedSongsLink').onclick = () => {
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.querySelector('.nav-link[data-view="library"]').classList.add('active');
+  currentView = 'library';
+  searchInput.value = '';
+  renderView();
+};
+
+/* "+" menu on a track row for adding it to a playlist */
+let openPlaylistMenuEl = null;
+function closePlaylistMenu() {
+  if (openPlaylistMenuEl) { openPlaylistMenuEl.remove(); openPlaylistMenuEl = null; }
+  document.removeEventListener('click', closePlaylistMenu);
+}
+function openPlaylistMenu(anchorEl, trackId) {
+  closePlaylistMenu();
+  const list = loadPlaylists();
+  const rect = anchorEl.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.style.cssText = `position:fixed; top:${rect.bottom + 4}px; left:${Math.min(rect.left, window.innerWidth - 210)}px; background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:6px; z-index:200; min-width:190px; max-height:240px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4);`;
+  const itemStyle = 'padding:8px 10px; font-size:13px; border-radius:6px; cursor:pointer;';
+  menu.innerHTML =
+    (list.length
+      ? list.map(p => `<div class="playlist-menu-item" data-id="${p.id}" style="${itemStyle}">${escapeHtml(p.name)}</div>`).join('')
+      : `<div style="padding:8px 10px; font-size:12px; color:var(--text-dim);">No playlists yet</div>`)
+    + `<div class="playlist-menu-item" data-new="1" style="${itemStyle} color:var(--accent); border-top:1px solid var(--border); margin-top:4px;">+ New playlist</div>`;
+  document.body.appendChild(menu);
+  openPlaylistMenuEl = menu;
+  menu.querySelectorAll('.playlist-menu-item').forEach(item => {
+    item.addEventListener('mouseenter', () => item.style.background = 'var(--bg-card-hover)');
+    item.addEventListener('mouseleave', () => item.style.background = '');
+    item.onclick = (e) => {
+      e.stopPropagation();
+      if (item.dataset.new) {
+        const name = prompt('Playlist name:');
+        if (name && name.trim()) createPlaylist(name.trim(), trackId);
+      } else {
+        addTrackToPlaylist(item.dataset.id, trackId);
+      }
+      closePlaylistMenu();
+    };
+  });
+  setTimeout(() => document.addEventListener('click', closePlaylistMenu), 0);
+}
 
 function loadLibrary() { try { return JSON.parse(localStorage.getItem(libKey())) || []; } catch(e) { return []; } }
 function saveLibrary(list) { localStorage.setItem(libKey(), JSON.stringify(list)); }
@@ -562,6 +733,7 @@ function allTracks() { return mockTracks.concat(loadLibrary()); }
 
 /* VIEW / NAV STATE */
 let currentView = 'home';
+let currentPlaylistId = null;
 const mainContent = document.getElementById('mainContent');
 const searchInput = document.getElementById('searchInput');
 
@@ -584,11 +756,55 @@ document.getElementById('goToAddBtn').onclick = () => {
 };
 
 function renderView() {
+  renderSidebarPlaylists();
   if (searchInput.value.trim()) { renderSearchResults(searchInput.value.trim()); return; }
   if (currentView === 'home') renderHome();
   else if (currentView === 'search') renderSearchEmpty();
   else if (currentView === 'library') renderLibrary();
   else if (currentView === 'admin') renderAdmin();
+  else if (currentView === 'playlist') renderPlaylistView();
+}
+
+function renderPlaylistView() {
+  const list = loadPlaylists();
+  const playlist = list.find(p => p.id === currentPlaylistId);
+  if (!playlist) { currentView = 'home'; renderHome(); return; }
+  const tracks = allTracks().filter(t => playlist.trackIds.includes(t.id));
+
+  mainContent.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <h2 class="section-title" style="margin:0;">${escapeHtml(playlist.name)}</h2>
+      <div style="display:flex; gap:8px;">
+        <button class="add-tab" id="renamePlaylistBtn">Rename</button>
+        <button class="add-tab" id="deletePlaylistBtn" style="border-color:var(--danger); color:var(--danger);">Delete</button>
+      </div>
+    </div>
+    <div class="track-list" id="playlistTrackList"></div>
+  `;
+
+  const trackListEl = document.getElementById('playlistTrackList');
+  if (tracks.length === 0) {
+    trackListEl.innerHTML = `<div class="empty-state">No tracks yet. Hit the + on any track (Home, Search, or Your library) to add it here.</div>`;
+  } else {
+    renderTrackList(trackListEl, tracks, { removable: true, onRemove: (id) => removeTrackFromPlaylist(playlist.id, id) });
+  }
+
+  document.getElementById('renamePlaylistBtn').onclick = () => {
+    const name = prompt('Rename playlist:', playlist.name);
+    if (!name || !name.trim()) return;
+    playlist.name = name.trim();
+    savePlaylists(list);
+    renderSidebarPlaylists();
+    renderPlaylistView();
+  };
+  document.getElementById('deletePlaylistBtn').onclick = () => {
+    if (!confirm(`Delete "${playlist.name}"? This can't be undone.`)) return;
+    savePlaylists(list.filter(p => p.id !== playlist.id));
+    currentView = 'home';
+    currentPlaylistId = null;
+    renderSidebarPlaylists();
+    renderView();
+  };
 }
 
 function renderHome() {
@@ -630,9 +846,16 @@ function renderHome() {
 async function fetchAIRecommendations() {
   const statusEl = document.getElementById('aiRecommendStatus');
   const gridEl = document.getElementById('aiRecommendGrid');
+  gridEl.innerHTML = '';
+
+  if (isGuest || !currentUser) {
+    statusEl.className = 'add-status error';
+    statusEl.textContent = 'Streamplay AI picks require an account — log in or sign up to use this.';
+    return;
+  }
+
   statusEl.className = 'add-status';
   statusEl.textContent = 'Streamplay AI is thinking...';
-  gridEl.innerHTML = '';
 
   const likedIds = loadLiked();
   const seedTracks = allTracks().filter(t => likedIds.includes(t.id)).concat(loadLibrary());
@@ -692,7 +915,7 @@ async function fetchAIRecommendations() {
 function renderSearchEmpty() {
   mainContent.innerHTML = `
     <h2 class="section-title">Search</h2>
-    <p class="empty-state">Start typing above to search your local catalog and everything you've added from YouTube, Spotify, and Apple Music.</p>
+    <p class="empty-state">Start typing above to search your local catalog and everything you've added from Jamendo or YouTube.</p>
   `;
 }
 function renderSearchResults(query) {
@@ -705,14 +928,14 @@ function renderSearchResults(query) {
   mainContent.innerHTML = `<h2 class="section-title">Results for "${escapeHtml(query)}"</h2><div class="track-list" id="trackList"></div>`;
   const listEl = document.getElementById('trackList');
   if (results.length === 0) {
-    listEl.innerHTML = `<div class="empty-state">No matches. Try a different search, or add this song from YouTube, Spotify, or Apple Music via "Your library".</div>`;
+    listEl.innerHTML = `<div class="empty-state">No matches. Try a different search, or add this song from Jamendo or YouTube via "Your library".</div>`;
     return;
   }
   renderTrackList(listEl, results);
 }
 searchInput.addEventListener('input', () => renderView());
 
-let addTab = 'link';
+let addTab = 'jamendo';
 
 function renderLibrary() {
   const library = loadLibrary();
@@ -723,8 +946,8 @@ function renderLibrary() {
     <h2 class="section-title">Add music</h2>
     <div class="add-panel">
       <div class="add-tabs">
-        <button class="add-tab ${addTab === 'link' ? 'active' : ''}" id="tabLink">Paste YouTube / Spotify link</button>
-        <button class="add-tab ${addTab === 'apple' ? 'active' : ''}" id="tabApple">Search Apple Music</button>
+        <button class="add-tab ${addTab === 'jamendo' ? 'active' : ''}" id="tabJamendo">Free & uncopyrighted (Jamendo)</button>
+        <button class="add-tab ${addTab === 'youtube' ? 'active' : ''}" id="tabYoutube">YouTube</button>
       </div>
       <div id="addPanelBody"></div>
     </div>
@@ -736,8 +959,8 @@ function renderLibrary() {
     <div class="track-list" id="libraryList"></div>
   `;
 
-  document.getElementById('tabLink').onclick = () => { addTab = 'link'; renderLibrary(); };
-  document.getElementById('tabApple').onclick = () => { addTab = 'apple'; renderLibrary(); };
+  document.getElementById('tabJamendo').onclick = () => { addTab = 'jamendo'; renderLibrary(); };
+  document.getElementById('tabYoutube').onclick = () => { addTab = 'youtube'; renderLibrary(); };
   renderAddPanelBody();
 
   const likedListEl = document.getElementById('likedList');
@@ -749,7 +972,7 @@ function renderLibrary() {
 
   const libListEl = document.getElementById('libraryList');
   if (library.length === 0) {
-    libListEl.innerHTML = `<div class="empty-state">No imported tracks yet. Use the panel above to pull songs in from YouTube, Spotify, or Apple Music.</div>`;
+    libListEl.innerHTML = `<div class="empty-state">No imported tracks yet. Use the panel above to pull songs in from Jamendo or YouTube.</div>`;
   } else {
     renderTrackList(libListEl, library, { removable: true });
   }
@@ -757,29 +980,81 @@ function renderLibrary() {
 
 function renderAddPanelBody() {
   const body = document.getElementById('addPanelBody');
-  if (addTab === 'link') {
+  if (addTab === 'jamendo') {
     body.innerHTML = `
       <div class="add-row">
-        <input id="linkInput" placeholder="Paste a YouTube or Spotify track/video URL...">
-        <button id="linkFetchBtn">Add</button>
+        <input id="jamendoQuery" placeholder="Search free, Creative Commons licensed music...">
+        <button id="jamendoSearchBtn">Search</button>
       </div>
-      <div class="add-hint">YouTube links play in full via YouTube's embedded player. Spotify links play via Spotify's official embed widget (30s preview, or full track if you're logged into Spotify in this browser).</div>
-      <div class="add-status" id="linkStatus"></div>
+      <div class="add-hint">Independent artists on Jamendo who've opted their tracks into free, Creative Commons distribution — full-length streams, safe to use without copyright claims.</div>
+      <div class="add-status" id="jamendoStatus"></div>
+      <div class="result-grid" id="jamendoResults"></div>
     `;
-    document.getElementById('linkFetchBtn').onclick = handleLinkAdd;
-    document.getElementById('linkInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleLinkAdd(); });
+    document.getElementById('jamendoSearchBtn').onclick = handleJamendoSearch;
+    document.getElementById('jamendoQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleJamendoSearch(); });
   } else {
     body.innerHTML = `
       <div class="add-row">
-        <input id="appleQuery" placeholder="Search song or artist on Apple Music...">
-        <button id="appleSearchBtn">Search</button>
+        <input id="ytccQuery" placeholder="Search YouTube for a song or artist...">
+        <button id="ytccSearchBtn">Search</button>
       </div>
-      <div class="add-hint">Uses Apple's public iTunes Search API. Adds a real 30-second preview clip you can play right in Streamplay.</div>
-      <div class="add-status" id="appleStatus"></div>
-      <div class="result-grid" id="appleResults"></div>
+      <div class="add-hint">Plays via YouTube's own embedded player, same as watching it on youtube.com.</div>
+      <div class="add-status" id="ytccStatus"></div>
+      <div class="result-grid" id="ytccResults"></div>
     `;
-    document.getElementById('appleSearchBtn').onclick = handleAppleSearch;
-    document.getElementById('appleQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleAppleSearch(); });
+    document.getElementById('ytccSearchBtn').onclick = handleYtccSearch;
+    document.getElementById('ytccQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleYtccSearch(); });
+  }
+}
+
+async function handleJamendoSearch() {
+  const q = document.getElementById('jamendoQuery').value.trim();
+  if (!q) return;
+  if (!JAMENDO_CLIENT_ID || JAMENDO_CLIENT_ID === 'YOUR_JAMENDO_CLIENT_ID') {
+    setStatus('jamendoStatus', 'Jamendo search isn\'t set up yet — add a free Jamendo client ID in the code first (devportal.jamendo.com).', 'error');
+    return;
+  }
+  setStatus('jamendoStatus', 'Searching Jamendo...', '');
+  document.getElementById('jamendoResults').innerHTML = '';
+  try {
+    const params = new URLSearchParams({
+      client_id: JAMENDO_CLIENT_ID, format: 'json', limit: '12',
+      search: q, include: 'musicinfo', audioformat: 'mp32'
+    });
+    const res = await fetch(`https://api.jamendo.com/v3.0/tracks/?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.headers && data.headers.error_message) || 'Search failed');
+    const results = data.results || [];
+    if (results.length === 0) {
+      setStatus('jamendoStatus', 'No results found for that search.', 'error');
+      return;
+    }
+    setStatus('jamendoStatus', `Found ${results.length} track(s).`, 'ok');
+    const grid = document.getElementById('jamendoResults');
+    grid.innerHTML = results.map((r, i) => `
+      <div class="result-card">
+        <img src="${r.image}" alt="">
+        <p class="result-title">${escapeHtml(r.name)}</p>
+        <p class="result-sub">${escapeHtml(r.artist_name)}</p>
+        <button class="result-add" data-idx="${i}">+ Add to library</button>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.result-add').forEach(btn => {
+      btn.onclick = () => {
+        const r = results[parseInt(btn.dataset.idx, 10)];
+        const track = {
+          id: 'jam_' + r.id, source: 'jamendo', previewUrl: r.audio,
+          name: r.name, artist: r.artist_name, album: 'Jamendo (Creative Commons)',
+          duration: parseInt(r.duration, 10) || 0,
+          thumbnail: r.image
+        };
+        addToLibrary(track);
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+      };
+    });
+  } catch (err) {
+    setStatus('jamendoStatus', 'Search failed: ' + (err.message || 'check your connection and client ID.'), 'error');
   }
 }
 
@@ -963,6 +1238,58 @@ async function handleAppleSearch() {
   }
 }
 
+async function handleYtccSearch() {
+  const q = document.getElementById('ytccQuery').value.trim();
+  if (!q) return;
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') {
+    setStatus('ytccStatus', 'YouTube search isn\'t set up yet — add a YouTube Data API key in the code first.', 'error');
+    return;
+  }
+  setStatus('ytccStatus', 'Searching YouTube...', '');
+  document.getElementById('ytccResults').innerHTML = '';
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q, type: 'video', videoCategoryId: '10',
+      maxResults: '12', key: YOUTUBE_API_KEY
+    });
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'Search failed');
+    const results = data.items || [];
+    if (results.length === 0) {
+      setStatus('ytccStatus', 'No results found for that search.', 'error');
+      return;
+    }
+    setStatus('ytccStatus', `Found ${results.length} track(s).`, 'ok');
+    const grid = document.getElementById('ytccResults');
+    grid.innerHTML = results.map((r, i) => `
+      <div class="result-card">
+        <img src="${r.snippet.thumbnails.medium.url}" alt="">
+        <p class="result-title">${escapeHtml(r.snippet.title)}</p>
+        <p class="result-sub">${escapeHtml(r.snippet.channelTitle)}</p>
+        <button class="result-add" data-idx="${i}">+ Add to library</button>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.result-add').forEach(btn => {
+      btn.onclick = () => {
+        const r = results[parseInt(btn.dataset.idx, 10)];
+        const videoId = r.id.videoId;
+        const track = {
+          id: 'yt_' + videoId, source: 'youtube', videoId,
+          name: r.snippet.title, artist: r.snippet.channelTitle,
+          album: 'YouTube', duration: 0,
+          thumbnail: r.snippet.thumbnails.medium.url
+        };
+        addToLibrary(track);
+        btn.disabled = true;
+        btn.textContent = 'Added ✓';
+      };
+    });
+  } catch (err) {
+    setStatus('ytccStatus', 'Search failed: ' + (err.message || 'check your connection and API key.'), 'error');
+  }
+}
+
 function addToLibrary(track) {
   const library = loadLibrary();
   if (library.some(t => t.id === track.id)) return;
@@ -1003,16 +1330,18 @@ function renderTrackList(container, list, opts) {
       <span style="display:flex; align-items:center; gap:8px;">
         ${sourceLabel ? `<span class="track-source">${sourceLabel}</span>` : ''}
         <button class="track-remove like-btn" title="Like">${liked ? '♥' : '♡'}</button>
+        <button class="track-remove playlist-add-btn" title="Add to playlist">&#43;</button>
         ${opts.removable ? `<button class="track-remove remove-btn" title="Remove">&times;</button>` : ''}
       </span>
     `;
     row.addEventListener('click', (e) => {
-      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn')) return;
+      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn') || e.target.closest('.playlist-add-btn')) return;
       playTrack(t);
     });
     row.querySelector('.like-btn').onclick = (e) => { e.stopPropagation(); toggleLike(t.id); };
+    row.querySelector('.playlist-add-btn').onclick = (e) => { e.stopPropagation(); openPlaylistMenu(e.currentTarget, t.id); };
     if (opts.removable) {
-      row.querySelector('.remove-btn').onclick = (e) => { e.stopPropagation(); removeFromLibrary(t.id); };
+      row.querySelector('.remove-btn').onclick = (e) => { e.stopPropagation(); (opts.onRemove || removeFromLibrary)(t.id); };
     }
     container.appendChild(row);
   });
@@ -1115,13 +1444,14 @@ function mountSpotify(trackId) {
 }
 
 appleAudio.addEventListener('timeupdate', () => {
-  if (!current || current.source !== 'apple') return;
+  if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
   curTimeEl.textContent = formatTime(appleAudio.currentTime);
   const dur = appleAudio.duration || current.duration || 30;
   progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
+  if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
 });
 appleAudio.addEventListener('ended', () => {
-  if (!current || current.source !== 'apple') return;
+  if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
   setPlaying(false);
   progressFill.style.width = '0%';
   curTimeEl.textContent = '0:00';
@@ -1181,7 +1511,7 @@ function playTrack(t) {
     mountSpotify(t.trackId);
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073;';
-  } else if (t.source === 'apple') {
+  } else if (t.source === 'apple' || t.source === 'jamendo') {
     appleAudio.src = t.previewUrl;
     appleAudio.currentTime = 0;
     appleAudio.play();
@@ -1222,7 +1552,7 @@ function setPlaying(state) {
     if (playing) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
   } else if (current.source === 'spotify' && spotifyController) {
     if (playing) spotifyController.resume(); else spotifyController.pause();
-  } else if (current.source === 'apple') {
+  } else if (current.source === 'apple' || current.source === 'jamendo') {
     if (playing) appleAudio.play(); else appleAudio.pause();
   }
 }
@@ -1241,7 +1571,7 @@ document.getElementById('progressBar').onclick = (e) => {
   } else if (current.source === 'youtube' && ytPlayer && ytPlayer.getDuration) {
     const dur = ytPlayer.getDuration();
     if (dur) ytPlayer.seekTo(pct * dur, true);
-  } else if (current.source === 'apple') {
+  } else if (current.source === 'apple' || current.source === 'jamendo') {
     const dur = appleAudio.duration || current.duration || 30;
     appleAudio.currentTime = pct * dur;
   }
@@ -1271,8 +1601,10 @@ async function startApp(user) {
     .eq('id', user.id)
     .maybeSingle();
 
+  let isNewProfile = false;
   if (!profile) {
     // Trigger may not have fired yet on a brand-new signup — create it here as a fallback.
+    isNewProfile = true;
     const displayName = user.user_metadata?.full_name || user.email;
     const { data: inserted } = await supabaseClient
       .from('profiles')
@@ -1289,6 +1621,17 @@ async function startApp(user) {
   document.getElementById('adminNavLink').style.display = (profile && profile.role === 'admin') ? '' : 'none';
 
   authOverlay.style.display = 'none';
+
+  if (isNewProfile) {
+    // First time we've seen this user — ask them to confirm/set their display name
+    // (covers Google sign-in, which skips the name field in the email/password form).
+    const googleName = user.user_metadata?.full_name;
+    onboardingName.value = (googleName && googleName !== user.email) ? googleName : '';
+    onboardingError.textContent = '';
+    onboardingOverlay.style.display = 'flex';
+    return; // app starts once they confirm their name in onboardingSaveBtn's handler
+  }
+
   if (!appStarted) { appStarted = true; renderView(); }
   else if (currentView === 'admin') { renderView(); } // refresh admin data if already viewing it
 }
