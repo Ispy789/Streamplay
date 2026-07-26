@@ -382,6 +382,13 @@
   .lyrics-panel-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
   .lyrics-panel-close:hover { color: var(--text); }
   .lyrics-panel-body { padding: 14px 16px; overflow-y: auto; white-space: pre-line; font-size: 13px; line-height: 1.8; color: var(--text); }
+  .lyrics-loading { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; }
+  .lyrics-spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   #partyBanner {
     display: none; align-items: center; gap: 4px; background: var(--bg-panel);
@@ -582,9 +589,10 @@ const SUPABASE_URL = 'https://fiskbsvqvuejrrpxekvh.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nDTFikSwYqQtCf9oEvwHxQ_ZbDMHzdG';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* YouTube Data API key — used only to SEARCH videos filtered to Creative
-   Commons license (royalty-free), then plays them via YouTube's own embedded
-   player (same as pasting a YouTube link). Get a key at
+/* YouTube Data API key — used to search the full YouTube Music catalog,
+   then plays results via YouTube's own embedded player (same as pasting
+   a YouTube link — no CC-only restriction, so real artists/labels show
+   up in search). Get a key at
    console.cloud.google.com -> APIs & Services -> Credentials -> Create
    Credentials -> API key, then enable "YouTube Data API v3" for it, then
    restrict the key to your website's URL (HTTP referrers) so nobody else
@@ -784,7 +792,7 @@ function renderSettingsTab(tab) {
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 0;">
         <div>
           <p class="card-title" style="margin:0 0 4px;">AI Audio Enhance</p>
-          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically for every track — loudness normalization, bass boost, vocal clarity and noise/volume balancing, no setup needed. Turn it off here if you'd rather hear the raw source.</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically — loudness normalization, bass boost, vocal clarity and noise/volume balancing — for Apple/Jamendo tracks. YouTube plays through YouTube's own player (which is most of what's in the catalog now), and browsers block outside code from reprocessing that audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
         </div>
         <label class="switch"><input type="checkbox" id="aiEnhanceToggle" ${appSettings.aiEnhance ? 'checked' : ''}><span class="slider"></span></label>
       </div>
@@ -871,14 +879,25 @@ function applyEnhanceState() {
 function updateQualityBadge() {
   const badge = document.getElementById('qualityBadge');
   if (!badge) return;
-  if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) { badge.style.display = 'none'; return; }
+  if (!current) { badge.style.display = 'none'; return; }
   badge.style.display = '';
-  if (appSettings.aiEnhance) {
-    badge.textContent = 'AI ENHANCED · FLAC';
-    badge.style.color = 'var(--accent)'; badge.style.borderColor = 'var(--accent)';
-  } else {
-    badge.textContent = 'STANDARD';
+  if (current.source === 'apple' || current.source === 'jamendo') {
+    if (appSettings.aiEnhance) {
+      badge.textContent = 'AI ENHANCED · FLAC-LIKE';
+      badge.style.color = 'var(--accent)'; badge.style.borderColor = 'var(--accent)';
+    } else {
+      badge.textContent = 'STANDARD';
+      badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
+    }
+  } else if (current.source === 'youtube') {
+    // Honest, not fake: the Web Audio graph can't reach cross-origin
+    // YouTube iframe audio, so "AI Enhance" genuinely can't touch this —
+    // showing an ENHANCED badge here would be lying. We do still ask
+    // YouTube for its best available stream quality.
+    badge.textContent = 'YOUTUBE · BEST AVAILABLE QUALITY';
     badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
@@ -1481,7 +1500,7 @@ async function fetchYoutubeTrending() {
     try {
       const params = new URLSearchParams({
         part: 'snippet,contentDetails', chart: 'mostPopular',
-        videoCategoryId: '10', regionCode: 'US', maxResults: '16', key: YOUTUBE_API_KEY
+        videoCategoryId: '10', regionCode: 'US', maxResults: '24', key: YOUTUBE_API_KEY
       });
       const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`);
       const data = await res.json();
@@ -1703,7 +1722,7 @@ function renderSearchResults(query) {
   }
 }
 
-/* Auto-search YouTube (Creative Commons only) as the person types in the
+/* Auto-search YouTube (full catalog, not CC-restricted) as the person types in the
    main search bar — Spotify-style instant search:
      - debounced ~300ms so it doesn't fire an API request on every keystroke
      - pressing Enter searches immediately instead of waiting for the debounce
@@ -1786,7 +1805,7 @@ async function runYoutubeSearch(q) {
   try {
     const params = new URLSearchParams({
       part: 'snippet', q, type: 'video', videoCategoryId: '10',
-      videoLicense: 'creativeCommon', maxResults: '12', key: YOUTUBE_API_KEY
+      maxResults: '25', key: YOUTUBE_API_KEY
     });
     const searchUrl = `https://www.googleapis.com/youtube/v3/search?${params}`;
     console.log('[YT DEBUG] Request URL:', searchUrl);
@@ -2104,7 +2123,39 @@ const lyricsCache = new Map(); // "artist|||title" -> string | null
 let lyricsPanelOpen = false;
 let lyricsRequestToken = 0;
 
-async function fetchLyrics(artist, title) {
+/* YouTube video titles are messy ("Coldplay - Fix You (Official Video)",
+   channel names like "ColdplayVEVO" or "Coldplay - Topic") — a literal
+   lookup against those almost never matches a lyrics database. This
+   strips the noise and, where the title itself contains "Artist - Song",
+   prefers that over the (often auto-generated) channel name. */
+function cleanForLyrics(str) {
+  return (str || '')
+    .replace(/\((?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered)[^)]*\)/gi, '')
+    .replace(/\[(?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered)[^\]]*\]/gi, '')
+    .replace(/\b(official\s*(music\s*)?video|official\s*audio|lyric\s*video|visualizer|remastered|hd|hq|4k)\b/gi, '')
+    .replace(/\bft\.?\s.+$/i, '')
+    .replace(/\bfeat\.?\s.+$/i, '')
+    .replace(/\s*-\s*topic$/i, '')
+    .replace(/vevo$/i, '')
+    .replace(/[|•·]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function lyricsCandidates(track) {
+  const cleanTitle = cleanForLyrics(track.name);
+  const cleanArtist = cleanForLyrics(track.artist);
+  const candidates = [{ artist: cleanArtist, title: cleanTitle }];
+  // If the title itself looks like "Artist - Song", that's usually more
+  // reliable than the channel name (which may be a label/aggregator).
+  const splitMatch = cleanTitle.match(/^(.+?)\s*-\s*(.+)$/);
+  if (splitMatch) candidates.push({ artist: splitMatch[1].trim(), title: splitMatch[2].trim() });
+  // Fall back to the raw, uncleaned fields as a last resort.
+  candidates.push({ artist: track.artist, title: track.name });
+  return candidates;
+}
+
+async function fetchLyricsOnce(artist, title) {
   const key = (artist + '|||' + title).toLowerCase();
   if (lyricsCache.has(key)) return lyricsCache.get(key);
   try {
@@ -2120,6 +2171,17 @@ async function fetchLyrics(artist, title) {
   }
 }
 
+/* Tries progressively looser candidates (cleaned title -> parsed
+   "Artist - Song" split -> raw fields) until one actually returns lyrics. */
+async function fetchLyrics(track) {
+  for (const c of lyricsCandidates(track)) {
+    if (!c.artist || !c.title) continue;
+    const lyrics = await fetchLyricsOnce(c.artist, c.title);
+    if (lyrics) return lyrics;
+  }
+  return null;
+}
+
 async function refreshLyricsPanel() {
   const titleEl = document.getElementById('lyricsPanelTitle');
   const subEl = document.getElementById('lyricsPanelSub');
@@ -2133,13 +2195,13 @@ async function refreshLyricsPanel() {
   }
   titleEl.textContent = current.name;
   subEl.textContent = current.artist;
-  bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">Looking up lyrics…</p>`;
+  bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Finding lyrics…</div>`;
   const myToken = ++lyricsRequestToken;
-  const lyrics = await fetchLyrics(current.artist, current.name);
+  const lyrics = await fetchLyrics(current);
   if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
   bodyEl.innerHTML = lyrics
     ? escapeHtml(lyrics).replace(/\n/g, '<br>')
-    : `<p class="empty-state" style="margin:0;">No lyrics found for this one.</p>`;
+    : `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics database has on file.</p>`;
 }
 
 document.getElementById('lyricsBtn').onclick = () => {
@@ -2310,7 +2372,13 @@ function playTrack(t, opts) {
   if (t.source === 'local') {
     setPlaying(true);
   } else if (t.source === 'youtube') {
-    if (ytReady && ytPlayer) { ytPlayer.loadVideoById(t.videoId); }
+    if (ytReady && ytPlayer) {
+      ytPlayer.loadVideoById(t.videoId);
+      // Best-effort: ask for the highest quality YouTube has for this
+      // stream. Modern YouTube mostly auto-selects this anyway, but it
+      // doesn't hurt to ask explicitly.
+      if (ytPlayer.setPlaybackQuality) ytPlayer.setPlaybackQuality('hd1080');
+    }
     else { ytPendingVideoId = t.videoId; }
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073;';
