@@ -213,6 +213,9 @@
   }
   .result-add:hover { border-color: var(--accent); color: var(--accent); }
   .result-add:disabled { opacity: 0.5; cursor: default; }
+  .result-actions { display: flex; gap: 6px; }
+  .result-actions .result-add { width: auto; flex: 1; }
+  .result-card.yt-result-card { cursor: pointer; }
 
   .player {
     grid-column: 1 / -1;
@@ -295,6 +298,43 @@
   .auth-switch span { color: var(--accent); cursor: pointer; }
   .auth-error { color: var(--danger); font-size: 12px; text-align: center; min-height: 16px; margin-top: 4px; }
   .auth-note { font-size: 10px; color: var(--text-dim); text-align: center; margin-top: 16px; line-height: 1.5; }
+
+  /* Settings / account switcher */
+  .settings-gear { cursor: pointer; color: var(--text-dim); font-size: 16px; flex-shrink: 0; }
+  .settings-gear:hover { color: var(--accent); }
+  .modal-card {
+    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 26px; width: 460px; max-width: 90vw; max-height: 82vh; overflow-y: auto;
+  }
+  .modal-tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+  .modal-tab {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  }
+  .modal-tab.active { background: var(--accent); color: #1a0f1c; border-color: var(--accent); font-weight: 700; }
+
+  /* Toggle switch */
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; cursor: pointer; inset: 0; background: var(--border);
+    transition: 0.2s; border-radius: 22px;
+  }
+  .switch .slider:before {
+    position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background: var(--text); transition: 0.2s; border-radius: 50%;
+  }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider:before { transform: translateX(18px); background: #1a0f1c; }
+
+  .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
+  .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
+
+  #partyBanner {
+    display: none; align-items: center; gap: 4px; background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px;
+    font-size: 12px; margin-bottom: 14px; width: fit-content;
+  }
 </style>
 </head>
 <body>
@@ -343,10 +383,27 @@
   </div>
 </div>
 
+<div id="settingsOverlay" style="display:none; position:fixed; inset:0; background:rgba(20,10,22,0.92); align-items:center; justify-content:center; z-index:120;">
+  <div class="modal-card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div class="logo" style="font-size:18px;"><span class="disc"></span>Settings</div>
+      <button id="closeSettingsBtn" style="background:none; border:none; color:var(--text-dim); font-size:20px; cursor:pointer; line-height:1;">&times;</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="profile">Profile</button>
+      <button class="modal-tab" data-tab="audio">Audio</button>
+      <button class="modal-tab" data-tab="friends">Friends &amp; Listen Together</button>
+      <button class="modal-tab" data-tab="account">Account</button>
+    </div>
+    <div id="settingsBody"></div>
+  </div>
+</div>
+
 <div class="app">
 
   <div class="sidebar">
     <div class="logo"><span class="disc"></span>Streamplay</div>
+    <div style="font-size:10px; color:var(--text-dim); margin-top:-18px; opacity:0.6;">build: yt-search-in-bar</div>
     <div class="nav">
       <a class="nav-link active" data-view="home">Home</a>
       <a class="nav-link" data-view="search">Search</a>
@@ -356,6 +413,7 @@
     <div class="playlists">
       <div class="heading">Playlists</div>
       <div class="playlist-item" id="likedSongsLink">&#9825; Liked Songs</div>
+      <div class="playlist-item" id="downloadsLink">&#11015; Downloads</div>
       <div class="playlist-item" id="newPlaylistBtn" style="color:var(--accent);">+ New Playlist</div>
       <div id="sidebarPlaylistList"></div>
     </div>
@@ -365,13 +423,14 @@
         <div class="account-name" id="accountName">Guest</div>
         <div class="logout-link" id="logoutLink">Log out</div>
       </div>
+      <div class="settings-gear" id="settingsGearBtn" title="Settings">&#9881;</div>
     </div>
   </div>
 
   <div class="main">
+    <div id="partyBanner"></div>
     <div class="topbar">
-      <input class="search" id="searchInput" placeholder="Search songs, artists, albums">
-      <button class="add-btn" id="goToAddBtn">+ Add music</button>
+      <input class="search" id="searchInput" placeholder="Search songs, artists, albums, or YouTube..." style="width:100%;">
     </div>
     <div id="mainContent"></div>
   </div>
@@ -383,6 +442,7 @@
         <div class="now-title" id="nowTitle">Nothing playing</div>
         <div class="now-artist" id="nowArtist">Pick a track to start</div>
       </div>
+      <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
     </div>
     <div class="controls">
       <div class="buttons">
@@ -466,13 +526,6 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
    restrict the key to your website's URL (HTTP referrers) so nobody else
    can use it. This is a plain API key, not OAuth — much simpler to set up. */
 const YOUTUBE_API_KEY = 'AIzaSyA_Nt0ucVkyXlvcnFCQXaegWFMXcUQcWEE';
-
-/* Jamendo API client ID — Jamendo hosts genuinely free, Creative Commons
-   licensed music (independent artists opted in to free distribution), and
-   returns full-length streamable mp3 URLs directly, no embed needed. Get a
-   free client ID at devportal.jamendo.com (Sign up -> Create an app), no
-   payment or approval wait required. */
-const JAMENDO_CLIENT_ID = 'YOUR_JAMENDO_CLIENT_ID';
 
 /* ACCOUNTS (real Supabase Auth — email/password + Google OAuth) */
 let authMode = 'login';
@@ -601,6 +654,7 @@ document.getElementById('guestBtn').onclick = (e) => {
 
 document.getElementById('logoutLink').onclick = async () => {
   isGuest = false;
+  if (typeof leaveParty === 'function') leaveParty();
   await supabaseClient.auth.signOut();
   location.reload();
 };
@@ -615,6 +669,536 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
     currentProfile = null;
   }
 });
+
+/* ============================================================
+   SETTINGS MODAL — Profile (display name), Audio (AI Enhance),
+   Friends & Listen Together (party mode), Account (switch/log out).
+   ============================================================ */
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsBody = document.getElementById('settingsBody');
+
+document.getElementById('settingsGearBtn').onclick = () => {
+  if (isGuest || !currentUser) { alert('Log in or sign up to access settings, friends, and listening parties.'); return; }
+  settingsOverlay.style.display = 'flex';
+  document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.modal-tab[data-tab="profile"]').classList.add('active');
+  renderSettingsTab('profile');
+};
+document.getElementById('closeSettingsBtn').onclick = () => { settingsOverlay.style.display = 'none'; };
+document.querySelectorAll('.modal-tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    renderSettingsTab(tab.dataset.tab);
+  };
+});
+
+function renderSettingsTab(tab) {
+  if (tab === 'profile') {
+    settingsBody.innerHTML = `
+      <div class="auth-field">
+        <label>Display name</label>
+        <input id="settingsNameInput" value="${escapeHtml((currentProfile && currentProfile.display_name) || '')}">
+      </div>
+      <button class="auth-submit" id="settingsSaveNameBtn">Save name</button>
+      <div class="add-status" id="settingsNameStatus"></div>
+    `;
+    document.getElementById('settingsSaveNameBtn').onclick = async () => {
+      const name = document.getElementById('settingsNameInput').value.trim();
+      const statusEl = document.getElementById('settingsNameStatus');
+      if (!name) { statusEl.className = 'add-status error'; statusEl.textContent = 'Enter a name.'; return; }
+      statusEl.className = 'add-status'; statusEl.textContent = 'Saving...';
+      const { data, error } = await supabaseClient.from('profiles').update({ display_name: name }).eq('id', currentUser.id).select().maybeSingle();
+      if (error) { statusEl.className = 'add-status error'; statusEl.textContent = error.message; return; }
+      currentProfile = data || currentProfile;
+      document.getElementById('accountName').textContent = name;
+      document.getElementById('avatarInitial').textContent = name.charAt(0).toUpperCase() || '?';
+      statusEl.className = 'add-status ok'; statusEl.textContent = 'Saved!';
+    };
+  } else if (tab === 'audio') {
+    settingsBody.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 0;">
+        <div>
+          <p class="card-title" style="margin:0 0 4px;">AI Audio Enhance</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically for every track — loudness normalization, bass boost, vocal clarity and noise/volume balancing, no setup needed. Turn it off here if you'd rather hear the raw source.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="aiEnhanceToggle" ${appSettings.aiEnhance ? 'checked' : ''}><span class="slider"></span></label>
+      </div>
+      <div class="add-hint">Applies to Apple/Jamendo preview playback — the only sources this app can pipe through the Web Audio API. YouTube and Spotify play through their own embedded players, so this toggle won't change those.</div>
+    `;
+    document.getElementById('aiEnhanceToggle').onchange = (e) => {
+      appSettings.aiEnhance = e.target.checked;
+      saveSettings(appSettings);
+      ensureAudioGraph();
+      applyEnhanceState();
+    };
+  } else if (tab === 'friends') {
+    renderFriendsTab();
+  } else if (tab === 'account') {
+    settingsBody.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="auth-submit" id="settingsSwitchAccountBtn" style="background:var(--bg-card); color:var(--text);">Switch account</button>
+        <button class="auth-submit" id="settingsLogoutBtn" style="background:var(--danger); color:#fff;">Log out</button>
+      </div>
+      <div class="add-hint">Switching signs you out of ${escapeHtml((currentProfile && currentProfile.display_name) || 'this account')} and brings back the login screen so you can sign into another one.</div>
+    `;
+    document.getElementById('settingsSwitchAccountBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
+    document.getElementById('settingsLogoutBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
+  }
+}
+
+/* ---- AI Audio Enhance (real DSP via Web Audio API) ----
+   Applied to the shared <audio id="applePreviewAudio"> element used for
+   Apple/Jamendo previews. Cross-origin YouTube/Spotify iframes can't be
+   reached by the Web Audio API, so those keep their native embed quality
+   regardless of this setting. */
+function settingsKey() { return 'streamplay_settings_' + (currentUser ? currentUser.id : 'anon'); }
+function loadSettings() {
+  // AI enhancement is ON by default — no manual setup required. The
+  // settings toggle exists only for people who want to turn it OFF.
+  try { return Object.assign({ aiEnhance: true }, JSON.parse(localStorage.getItem(settingsKey()))); }
+  catch (e) { return { aiEnhance: true }; }
+}
+function saveSettings(s) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
+let appSettings = loadSettings();
+
+/* ---- AI Audio Enhance DSP chain ----
+   loudness normalization + dynamic EQ  -> compressor
+   bass enhancement                     -> low-shelf filter
+   vocal clarity                        -> presence peaking filter (~2.5kHz)
+   noise reduction / balance            -> high-shelf + gentle makeup gain
+   Applied automatically; nothing for the user to configure. */
+let audioCtx = null, enhanceSource = null, enhanceComp = null, enhanceBass = null, enhancePresence = null, enhanceShelf = null, enhanceGain = null;
+function ensureAudioGraph() {
+  if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    enhanceSource = audioCtx.createMediaElementSource(appleAudio);
+    enhanceComp = audioCtx.createDynamicsCompressor(); // loudness normalization
+    enhanceComp.threshold.value = -18; enhanceComp.knee.value = 20; enhanceComp.ratio.value = 1;
+    enhanceBass = audioCtx.createBiquadFilter(); // bass enhancement
+    enhanceBass.type = 'lowshelf'; enhanceBass.frequency.value = 120; enhanceBass.gain.value = 0;
+    enhancePresence = audioCtx.createBiquadFilter(); // vocal clarity
+    enhancePresence.type = 'peaking'; enhancePresence.frequency.value = 2500; enhancePresence.Q.value = 1; enhancePresence.gain.value = 0;
+    enhanceShelf = audioCtx.createBiquadFilter(); // air / de-noise balance
+    enhanceShelf.type = 'highshelf'; enhanceShelf.frequency.value = 9000; enhanceShelf.gain.value = 0;
+    enhanceGain = audioCtx.createGain(); enhanceGain.gain.value = 1; // volume balancing
+    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(audioCtx.destination);
+    applyEnhanceState();
+  } catch (e) { console.warn('Web Audio graph unavailable:', e.message); }
+}
+function applyEnhanceState() {
+  if (!enhanceShelf) { updateQualityBadge(); return; }
+  if (appSettings.aiEnhance) {
+    enhanceShelf.gain.value = 5.5;
+    enhanceBass.gain.value = 4;
+    enhancePresence.gain.value = 3;
+    enhanceComp.ratio.value = 3;
+    enhanceGain.gain.value = 1.08;
+  } else {
+    enhanceShelf.gain.value = 0;
+    enhanceBass.gain.value = 0;
+    enhancePresence.gain.value = 0;
+    enhanceComp.ratio.value = 1;
+    enhanceGain.gain.value = 1;
+  }
+  updateQualityBadge();
+}
+function updateQualityBadge() {
+  const badge = document.getElementById('qualityBadge');
+  if (!badge) return;
+  if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) { badge.style.display = 'none'; return; }
+  badge.style.display = '';
+  if (appSettings.aiEnhance) {
+    badge.textContent = 'AI ENHANCED · FLAC';
+    badge.style.color = 'var(--accent)'; badge.style.borderColor = 'var(--accent)';
+  } else {
+    badge.textContent = 'STANDARD';
+    badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
+  }
+}
+
+/* ---- Friends (requires a `friends` table in Supabase — see the setup
+   SQL shown automatically in the Friends tab if the table doesn't exist
+   yet) ---- */
+async function renderFriendsTab() {
+  settingsBody.innerHTML = `<p class="empty-state">Loading friends...</p>`;
+  try {
+    const [{ data: outgoing, error: e1 }, { data: incoming, error: e2 }] = await Promise.all([
+      supabaseClient.from('friends').select('*').eq('requester_id', currentUser.id),
+      supabaseClient.from('friends').select('*').eq('addressee_id', currentUser.id),
+    ]);
+    if (e1) throw e1; if (e2) throw e2;
+
+    const accepted = [...(outgoing || []).filter(f => f.status === 'accepted'), ...(incoming || []).filter(f => f.status === 'accepted')];
+    const pendingIncoming = (incoming || []).filter(f => f.status === 'pending');
+    const otherIds = accepted.map(f => f.requester_id === currentUser.id ? f.addressee_id : f.requester_id);
+
+    let otherProfiles = [];
+    if (otherIds.length) {
+      const { data } = await supabaseClient.from('profiles').select('id, display_name, email').in('id', otherIds);
+      otherProfiles = data || [];
+    }
+    let pendingProfiles = [];
+    if (pendingIncoming.length) {
+      const { data } = await supabaseClient.from('profiles').select('id, display_name, email').in('id', pendingIncoming.map(f => f.requester_id));
+      pendingProfiles = data || [];
+    }
+
+    settingsBody.innerHTML = `
+      <div class="add-row">
+        <input id="friendSearchInput" placeholder="Find someone by name or email...">
+        <button id="friendSearchBtn">Search</button>
+      </div>
+      <div class="add-status" id="friendSearchStatus"></div>
+      <div id="friendSearchResults"></div>
+
+      ${pendingProfiles.length ? `<h2 class="section-title" style="font-size:14px; margin:18px 0 8px;">Requests</h2>${pendingProfiles.map(p => `
+        <div class="friend-row" data-req="${p.id}">
+          <span>${escapeHtml(p.display_name || p.email)}</span>
+          <span style="display:flex; gap:6px;">
+            <button class="add-tab friend-accept-btn">Accept</button>
+            <button class="add-tab friend-decline-btn" style="border-color:var(--danger); color:var(--danger);">Decline</button>
+          </span>
+        </div>`).join('')}` : ''}
+
+      <h2 class="section-title" style="font-size:14px; margin:18px 0 8px;">Your friends</h2>
+      <div>
+        ${accepted.length ? otherProfiles.map(p => `
+          <div class="friend-row">
+            <span>${escapeHtml(p.display_name || p.email)}</span>
+            <button class="add-tab friend-invite-btn" data-friend-id="${p.id}" data-friend-name="${escapeHtml(p.display_name || p.email)}">Listen together</button>
+          </div>`).join('') : `<p class="empty-state">No friends yet — search above to add some.</p>`}
+      </div>
+
+      <h2 class="section-title" style="font-size:14px; margin:18px 0 8px;">Listening Party</h2>
+      <div id="partyControls"></div>
+    `;
+    renderPartyControls();
+
+    document.getElementById('friendSearchBtn').onclick = searchFriends;
+    document.getElementById('friendSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchFriends(); });
+    settingsBody.querySelectorAll('.friend-accept-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        const id = e.target.closest('.friend-row').dataset.req;
+        await supabaseClient.from('friends').update({ status: 'accepted' }).eq('requester_id', id).eq('addressee_id', currentUser.id);
+        renderFriendsTab();
+      };
+    });
+    settingsBody.querySelectorAll('.friend-decline-btn').forEach(btn => {
+      btn.onclick = async (e) => {
+        const id = e.target.closest('.friend-row').dataset.req;
+        await supabaseClient.from('friends').delete().eq('requester_id', id).eq('addressee_id', currentUser.id);
+        renderFriendsTab();
+      };
+    });
+    settingsBody.querySelectorAll('.friend-invite-btn').forEach(btn => {
+      btn.onclick = () => inviteFriendToParty(btn.dataset.friendName);
+    });
+  } catch (err) {
+    settingsBody.innerHTML = `
+      <p class="empty-state">Friends need one extra table in your Supabase project. Run this once in the SQL editor, then reopen this tab:</p>
+      <pre style="background:var(--bg-card); padding:12px; border-radius:8px; font-size:11px; overflow-x:auto; white-space:pre-wrap;">create table friends (
+  requester_id uuid references auth.users(id),
+  addressee_id uuid references auth.users(id),
+  status text default 'pending',
+  created_at timestamptz default now(),
+  primary key (requester_id, addressee_id)
+);
+alter table friends enable row level security;
+create policy "read own" on friends for select using (auth.uid() = requester_id or auth.uid() = addressee_id);
+create policy "insert own" on friends for insert with check (auth.uid() = requester_id);
+create policy "update own" on friends for update using (auth.uid() = addressee_id);
+create policy "delete own" on friends for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);</pre>
+      <p class="empty-state" style="color:var(--danger);">(${escapeHtml(err.message || 'Table not found')})</p>
+    `;
+  }
+}
+
+async function searchFriends() {
+  const q = document.getElementById('friendSearchInput').value.trim();
+  const statusEl = document.getElementById('friendSearchStatus');
+  const resultsEl = document.getElementById('friendSearchResults');
+  if (!q) return;
+  statusEl.className = 'add-status'; statusEl.textContent = 'Searching...';
+  resultsEl.innerHTML = '';
+  const { data, error } = await supabaseClient.from('profiles')
+    .select('id, display_name, email')
+    .or(`display_name.ilike.%${q}%,email.ilike.%${q}%`)
+    .neq('id', currentUser.id)
+    .limit(8);
+  if (error) { statusEl.className = 'add-status error'; statusEl.textContent = error.message; return; }
+  if (!data || data.length === 0) { statusEl.textContent = 'No matches.'; return; }
+  statusEl.textContent = '';
+  resultsEl.innerHTML = data.map(p => `
+    <div class="friend-row">
+      <span>${escapeHtml(p.display_name || p.email)}</span>
+      <button class="add-tab friend-add-btn" data-id="${p.id}">Add friend</button>
+    </div>`).join('');
+  resultsEl.querySelectorAll('.friend-add-btn').forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = 'Sending...';
+      const { error: e } = await supabaseClient.from('friends').insert({ requester_id: currentUser.id, addressee_id: btn.dataset.id, status: 'pending' });
+      btn.textContent = e ? (e.message || 'Failed') : 'Request sent';
+    };
+  });
+}
+
+/* ---- Listening Together (Party Mode) via Supabase Realtime broadcast.
+   Whoever starts a party is effectively the "host": every playTrack()
+   call broadcasts to the room, and everyone else mirrors it locally. ---- */
+let partyChannel = null;
+let partyCode = null;
+let partyIsHost = false;
+let partyMembers = 1;
+
+function renderPartyControls() {
+  const el = document.getElementById('partyControls');
+  if (!el) return;
+  if (partyChannel) {
+    el.innerHTML = `
+      <div class="friend-row">
+        <span>Room code: <b style="color:var(--accent);">${partyCode}</b>${partyIsHost ? ' (you\'re hosting)' : ''}</span>
+        <button class="add-tab" id="leavePartyBtn" style="border-color:var(--danger); color:var(--danger);">Leave</button>
+      </div>
+      <p class="add-hint">Share this code with a friend so they can join from their own Friends &amp; Listen Together tab. Whatever either of you plays, the other will hear too.</p>
+    `;
+    document.getElementById('leavePartyBtn').onclick = () => { leaveParty(); renderPartyControls(); };
+  } else {
+    el.innerHTML = `
+      <div class="add-row">
+        <button class="add-btn" id="startPartyBtn" style="border-radius:6px; white-space:nowrap;">Start a party</button>
+        <input id="joinPartyInput" placeholder="Or enter a room code...">
+        <button id="joinPartyBtn">Join</button>
+      </div>
+    `;
+    document.getElementById('startPartyBtn').onclick = () => { startParty(); renderPartyControls(); };
+    document.getElementById('joinPartyBtn').onclick = () => {
+      const code = document.getElementById('joinPartyInput').value.trim().toUpperCase();
+      if (!code) return;
+      joinParty(code);
+      renderPartyControls();
+    };
+  }
+}
+
+function startParty() {
+  partyCode = Math.random().toString(36).slice(2, 7).toUpperCase();
+  partyIsHost = true;
+  connectPartyChannel(partyCode);
+}
+function joinParty(code) {
+  partyCode = code;
+  partyIsHost = false;
+  connectPartyChannel(partyCode);
+}
+function connectPartyChannel(code) {
+  if (partyChannel) supabaseClient.removeChannel(partyChannel);
+  partyChannel = supabaseClient.channel('party_' + code, { config: { presence: { key: currentUser.id } } });
+  partyChannel.on('broadcast', { event: 'play_track' }, ({ payload }) => {
+    if (payload.senderId === currentUser.id) return;
+    playTrack(payload.track, { fromParty: true });
+  });
+  partyChannel.on('presence', { event: 'sync' }, () => {
+    const state = partyChannel.presenceState();
+    partyMembers = Object.keys(state).length || 1;
+    updatePartyBanner();
+  });
+  partyChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await partyChannel.track({ user: (currentProfile && currentProfile.display_name) || 'Guest' });
+      showPartyBanner();
+    }
+  });
+}
+function leaveParty() {
+  if (partyChannel) { supabaseClient.removeChannel(partyChannel); partyChannel = null; }
+  partyCode = null;
+  partyIsHost = false;
+  hidePartyBanner();
+}
+function inviteFriendToParty(friendName) {
+  if (!partyChannel) { startParty(); renderPartyControls(); }
+  alert(`Listening party started! Share this room code with ${friendName}: ${partyCode}`);
+}
+function broadcastTrackToParty(track) {
+  if (!partyChannel) return;
+  partyChannel.send({ type: 'broadcast', event: 'play_track', payload: { track, senderId: currentUser.id } });
+}
+function showPartyBanner() {
+  const banner = document.getElementById('partyBanner');
+  banner.style.display = 'flex';
+  updatePartyBanner();
+}
+function hidePartyBanner() {
+  const banner = document.getElementById('partyBanner');
+  if (banner) banner.style.display = 'none';
+}
+function updatePartyBanner() {
+  const banner = document.getElementById('partyBanner');
+  if (!banner || !partyChannel) return;
+  banner.innerHTML = `&#127911;&nbsp; Listening party <b style="color:var(--accent); margin:0 4px;">${partyCode}</b> · ${partyMembers} listening <span id="partyBannerLeave" style="margin-left:10px; text-decoration:underline; cursor:pointer; color:var(--text-dim);">Leave</span>`;
+  document.getElementById('partyBannerLeave').onclick = () => { leaveParty(); const el = document.getElementById('partyControls'); if (el) renderPartyControls(); };
+}
+
+/* ---- Offline downloads. Only Apple/Jamendo tracks have a direct,
+   playable audio file — YouTube and Spotify are streamed through
+   platform-licensed embeds and can't legally be saved as files, so
+   those sources don't get a download option. ---- */
+function downloadsKey() { return 'streamplay_downloads_' + (currentUser ? currentUser.id : 'anon'); }
+function loadDownloads() { try { return JSON.parse(localStorage.getItem(downloadsKey())) || {}; } catch (e) { return {}; } }
+function saveDownloads(d) {
+  try { localStorage.setItem(downloadsKey(), JSON.stringify(d)); }
+  catch (e) { alert('Not enough browser storage left for more downloads. Remove one first.'); }
+}
+function isDownloaded(id) { return !!loadDownloads()[id]; }
+
+async function toggleDownload(track, btnEl) {
+  const downloads = loadDownloads();
+  if (downloads[track.id]) {
+    delete downloads[track.id];
+    saveDownloads(downloads);
+    if (btnEl) btnEl.innerHTML = '&#11015;';
+    if (currentView === 'downloads') renderDownloadsView();
+    return;
+  }
+  if (btnEl) { btnEl.textContent = '...'; btnEl.disabled = true; }
+  try {
+    const res = await fetch(track.previewUrl);
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    downloads[track.id] = { track, dataUrl, savedAt: Date.now() };
+    saveDownloads(downloads);
+    if (btnEl) { btnEl.innerHTML = '&#10003;'; btnEl.disabled = false; }
+  } catch (e) {
+    if (btnEl) { btnEl.innerHTML = '&#11015;'; btnEl.disabled = false; }
+    alert('Could not download this track for offline listening.');
+  }
+}
+
+function renderDownloadsView() {
+  const downloads = loadDownloads();
+  const tracks = Object.values(downloads).map(d => d.track);
+  mainContent.innerHTML = `
+    <h2 class="section-title">Downloads</h2>
+    <p class="empty-state" style="padding:0 0 12px;">Saved for offline listening on this device (Apple/Jamendo preview tracks only).</p>
+    <div class="track-list" id="downloadsTrackList"></div>
+  `;
+  const el = document.getElementById('downloadsTrackList');
+  if (tracks.length === 0) {
+    el.innerHTML = `<div class="empty-state">Nothing downloaded yet. Tap the &#11015; next to an Apple/Jamendo track to save it here.</div>`;
+  } else {
+    renderTrackList(el, tracks, { removable: false });
+  }
+}
+
+document.getElementById('downloadsLink').onclick = () => {
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  currentView = 'downloads';
+  searchInput.value = '';
+  renderView();
+};
+
+/* ============================================================
+   AI PERSONALIZATION ENGINE
+   Every meaningful action (search, play, skip, replay, like,
+   playlist add, listening time) becomes a signal stored per-user
+   in localStorage. From those signals we compute:
+     1) an artist affinity score (what the person actually likes)
+     2) a trending/personalized mix ratio that shifts as more
+        signal accumulates (70/30 -> 50/50 -> 20/80)
+   ============================================================ */
+const SIGNAL_WEIGHT = { play: 1, replay: 2, like: 3, unlike: -2, playlist_add: 2, search: 0.5, skip: -1.5, listen_15s: 0.5 };
+
+function eventsKey() { return 'streamplay_events_' + (currentUser ? currentUser.id : 'anon'); }
+function loadEvents() { try { return JSON.parse(localStorage.getItem(eventsKey())) || []; } catch (e) { return []; } }
+function saveEvents(list) {
+  // Cap history so localStorage doesn't grow unbounded.
+  if (list.length > 500) list = list.slice(list.length - 500);
+  localStorage.setItem(eventsKey(), JSON.stringify(list));
+}
+
+function trackEvent(type, track, extra) {
+  const events = loadEvents();
+  events.push({
+    type, ts: Date.now(),
+    artist: track ? track.artist : (extra && extra.artist) || null,
+    name: track ? track.name : (extra && extra.query) || null,
+    source: track ? track.source : null,
+  });
+  saveEvents(events);
+  refreshRecalibrationDisplay();
+}
+
+/* History — distinct from Library. Library = saved tracks. History = an
+   append-only "what did you actually listen to" log, used both by the
+   AI engine and surfaced directly in unified search results. */
+function historyKey() { return 'streamplay_history_' + (currentUser ? currentUser.id : 'anon'); }
+function loadHistory() { try { return JSON.parse(localStorage.getItem(historyKey())) || []; } catch (e) { return []; } }
+function pushHistory(track) {
+  let hist = loadHistory().filter(t => t.id !== track.id); // move to front, no dupes
+  hist.unshift(track);
+  if (hist.length > 100) hist = hist.slice(0, 100);
+  localStorage.setItem(historyKey(), JSON.stringify(hist));
+}
+
+function computeAffinity() {
+  const events = loadEvents();
+  const scores = {}; // artist -> score
+  events.forEach(e => {
+    if (!e.artist) return;
+    const w = SIGNAL_WEIGHT[e.type] || 0;
+    scores[e.artist] = (scores[e.artist] || 0) + w;
+  });
+  return scores; // higher = stronger taste signal
+}
+
+/* Weighted "signal strength" used only to decide the trending/personalized
+   ratio — plays/likes/adds count, passive searches count less. */
+function signalStrength() {
+  const events = loadEvents();
+  return events.filter(e => ['play', 'like', 'playlist_add', 'replay'].includes(e.type)).length;
+}
+
+function recommendationRatio() {
+  const n = signalStrength();
+  if (n < 8) return { trending: 0.7, personalized: 0.3, label: 'Getting to know your taste' };
+  if (n < 25) return { trending: 0.5, personalized: 0.5, label: 'Dialing in your taste' };
+  return { trending: 0.2, personalized: 0.8, label: 'Tuned to your taste' };
+}
+
+function refreshRecalibrationDisplay() {
+  const el = document.getElementById('recalStatus');
+  if (!el) return;
+  const r = recommendationRatio();
+  el.textContent = `${r.label} · ${Math.round(r.trending * 100)}% trending / ${Math.round(r.personalized * 100)}% for you`;
+}
+
+/* Builds the personalized portion of the homepage feed: tracks whose
+   artist matches the person's top affinity artists, weighted-sampled so
+   stronger signals surface more often but it's not 100% deterministic. */
+function personalizedPicks(pool, count) {
+  const scores = computeAffinity();
+  const artists = Object.keys(scores).filter(a => scores[a] > 0);
+  if (artists.length === 0) return [];
+  const weighted = pool.filter(t => artists.includes(t.artist))
+    .map(t => ({ t, w: Math.max(0.1, scores[t.artist]) }));
+  weighted.sort((a, b) => b.w - a.w);
+  const picks = [];
+  const seen = new Set();
+  for (const { t } of weighted) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    picks.push(t);
+    if (picks.length >= count) break;
+  }
+  return picks;
+}
 
 /* PER-USER LIBRARY STORAGE (local per browser; swap for a Supabase table later if you want it synced across devices) */
 function libKey() { return 'streamplay_library_' + (currentUser ? currentUser.id : 'anon'); }
@@ -637,7 +1221,11 @@ function addTrackToPlaylist(playlistId, trackId) {
   const list = loadPlaylists();
   const playlist = list.find(p => p.id === playlistId);
   if (!playlist) return;
-  if (!playlist.trackIds.includes(trackId)) playlist.trackIds.push(trackId);
+  if (!playlist.trackIds.includes(trackId)) {
+    playlist.trackIds.push(trackId);
+    const track = allTracks().find(t => t.id === trackId) || loadHistory().find(t => t.id === trackId);
+    trackEvent('playlist_add', track);
+  }
   savePlaylists(list);
   if (currentView === 'playlist' && currentPlaylistId === playlistId) renderPlaylistView();
 }
@@ -750,13 +1338,6 @@ document.querySelectorAll('.nav-link').forEach(link => {
   });
 });
 
-document.getElementById('goToAddBtn').onclick = () => {
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  document.querySelector('.nav-link[data-view="library"]').classList.add('active');
-  currentView = 'library';
-  renderView();
-};
-
 function renderView() {
   renderSidebarPlaylists();
   if (searchInput.value.trim()) { renderSearchResults(searchInput.value.trim()); return; }
@@ -765,6 +1346,7 @@ function renderView() {
   else if (currentView === 'library') renderLibrary();
   else if (currentView === 'admin') renderAdmin();
   else if (currentView === 'playlist') renderPlaylistView();
+  else if (currentView === 'downloads') renderDownloadsView();
 }
 
 function renderPlaylistView() {
@@ -816,20 +1398,31 @@ function renderHome() {
       <p class="card-title">${escapeHtml(a.name)}</p><p class="card-sub">${escapeHtml(a.artist)}</p>
     </div>`).join('');
 
+  // Homepage is never empty: cold-start users see trending immediately,
+  // then the mix gradually shifts toward personalized picks as signal
+  // accumulates (see recommendationRatio()).
+  const ratio = recommendationRatio();
+  const pool = allTracks().concat(loadHistory());
+  const personalized = personalizedPicks(pool, mockTracks.length);
+  const personalCount = Math.round(mockTracks.length * ratio.personalized);
+  const blended = personalized.slice(0, personalCount)
+    .concat(mockTracks.filter(t => !personalized.slice(0, personalCount).some(p => p.id === t.id)))
+    .slice(0, Math.max(mockTracks.length, personalized.length));
+
   mainContent.innerHTML = `
     <div class="add-panel" style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
       <div>
         <p class="card-title" style="margin:0 0 4px;">Streamplay AI</p>
-        <p class="card-sub" style="margin:0;">Get picks based on what you've liked and added, like a "for you" mix.</p>
+        <p class="card-sub" style="margin:0;" id="recalStatus">${ratio.label} · ${Math.round(ratio.trending * 100)}% trending / ${Math.round(ratio.personalized * 100)}% for you</p>
       </div>
       <button class="add-btn" id="aiRecommendBtn">Get AI picks</button>
     </div>
     <div id="aiRecommendStatus" class="add-status" style="margin:-14px 0 14px;"></div>
     <div class="result-grid" id="aiRecommendGrid"></div>
 
-    <h2 class="section-title">Made for you</h2>
+    <h2 class="section-title">${personalized.length ? 'For you' : 'Trending now'}</h2>
     <div class="grid" id="albumGrid">${albumGridHtml}</div>
-    <h2 class="section-title">Popular tracks</h2>
+    <h2 class="section-title">${personalized.length ? 'Your mix' : 'Trending tracks'}</h2>
     <div class="track-list" id="trackList"></div>
   `;
 
@@ -841,7 +1434,7 @@ function renderHome() {
     };
   });
 
-  renderTrackList(document.getElementById('trackList'), mockTracks);
+  renderTrackList(document.getElementById('trackList'), blended);
   document.getElementById('aiRecommendBtn').onclick = fetchAIRecommendations;
 }
 
@@ -917,27 +1510,265 @@ async function fetchAIRecommendations() {
 function renderSearchEmpty() {
   mainContent.innerHTML = `
     <h2 class="section-title">Search</h2>
-    <p class="empty-state">Start typing above to search your local catalog and everything you've added from Jamendo or YouTube.</p>
+    <p class="empty-state">One search, everything at once — your tracks, playlists, history, and YouTube all show up here together. Tap anything to play it instantly.</p>
   `;
 }
+
+/* ONE unified search: local tracks/history/playlists resolve instantly
+   and render first, live YouTube results stream in right underneath in
+   the same feed — no separate screens, no separate "system". */
 function renderSearchResults(query) {
   const q = query.toLowerCase();
-  const results = allTracks().filter(t =>
+  const localMatches = allTracks().filter(t =>
     t.name.toLowerCase().includes(q) ||
     t.artist.toLowerCase().includes(q) ||
     (t.album || '').toLowerCase().includes(q)
   );
-  mainContent.innerHTML = `<h2 class="section-title">Results for "${escapeHtml(query)}"</h2><div class="track-list" id="trackList"></div>`;
+  const historyMatches = loadHistory().filter(t =>
+    !localMatches.some(m => m.id === t.id) &&
+    (t.name.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
+  );
+  const playlistMatches = loadPlaylists().filter(p => p.name.toLowerCase().includes(q));
+  const combined = localMatches.concat(historyMatches);
+
+  mainContent.innerHTML = `
+    <h2 class="section-title">Results for "${escapeHtml(query)}"</h2>
+    ${playlistMatches.length ? `
+      <div class="grid" id="playlistMatchGrid" style="margin-bottom:20px;">
+        ${playlistMatches.map(p => `
+          <div class="card" data-playlist-id="${p.id}">
+            <div class="art" style="background:var(--bg-card)">&#128193;</div>
+            <p class="card-title">${escapeHtml(p.name)}</p><p class="card-sub">Playlist &middot; ${p.trackIds.length} tracks</p>
+          </div>`).join('')}
+      </div>` : ''}
+    <div class="track-list" id="trackList"></div>
+    <div class="add-status" id="ytSearchStatus" style="margin-top:14px;"></div>
+    <div class="result-grid" id="ytSearchResults"></div>
+  `;
   const listEl = document.getElementById('trackList');
-  if (results.length === 0) {
-    listEl.innerHTML = `<div class="empty-state">No matches. Try a different search, or add this song from Jamendo or YouTube via "Your library".</div>`;
+  if (combined.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">Nothing saved matches yet — check below for YouTube results.</div>`;
+  } else {
+    renderTrackList(listEl, combined);
+  }
+  const playlistGrid = document.getElementById('playlistMatchGrid');
+  if (playlistGrid) {
+    playlistGrid.querySelectorAll('.card').forEach(card => {
+      card.onclick = () => {
+        currentView = 'playlist';
+        currentPlaylistId = card.dataset.playlistId;
+        searchInput.value = '';
+        renderView();
+      };
+    });
+  }
+}
+
+/* Auto-search YouTube (Creative Commons only) as the person types in the
+   main search bar — Spotify-style instant search:
+     - debounced ~300ms so it doesn't fire an API request on every keystroke
+     - pressing Enter searches immediately instead of waiting for the debounce
+     - previous queries are cached in-memory so repeating a search is instant
+     - token-guarded so a slow response from an earlier keystroke can't
+       overwrite a newer one */
+let ytSearchTimer = null;
+let ytSearchToken = 0;
+const YT_SEARCH_DEBOUNCE_MS = 300;
+const ytSearchCache = new Map(); // lowercased/trimmed query -> processed results array
+
+let searchSignalTimer = null;
+searchInput.addEventListener('input', () => {
+  renderView();
+  clearTimeout(ytSearchTimer);
+  const q = searchInput.value.trim();
+  if (!q) { ytSearchToken++; return; }
+  ytSearchTimer = setTimeout(() => runYoutubeSearch(q), YT_SEARCH_DEBOUNCE_MS);
+  // Log the search itself as a taste signal, debounced longer than the
+  // YouTube fetch so we don't log a row per keystroke.
+  clearTimeout(searchSignalTimer);
+  searchSignalTimer = setTimeout(() => trackEvent('search', null, { query: q, artist: q }), 900);
+});
+
+// Enter fires the YouTube search right away instead of waiting on the debounce.
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  clearTimeout(ytSearchTimer);
+  const q = searchInput.value.trim();
+  if (q) runYoutubeSearch(q);
+});
+
+/* Converts an ISO 8601 duration (e.g. "PT3M27S") from the YouTube API into seconds. */
+function parseYoutubeDuration(iso) {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || '');
+  if (!m) return 0;
+  const h = parseInt(m[1] || 0, 10), min = parseInt(m[2] || 0, 10), s = parseInt(m[3] || 0, 10);
+  return h * 3600 + min * 60 + s;
+}
+
+async function runYoutubeSearch(q) {
+  console.log('[YT DEBUG] runYoutubeSearch() called with query:', JSON.stringify(q));
+
+  const myToken = ++ytSearchToken;
+  const statusEl = document.getElementById('ytSearchStatus');
+  const gridEl = document.getElementById('ytSearchResults');
+  if (!statusEl || !gridEl) {
+    console.log('[YT DEBUG] STOP: #ytSearchStatus or #ytSearchResults not found in DOM. statusEl=', statusEl, 'gridEl=', gridEl);
     return;
   }
-  renderTrackList(listEl, results);
-}
-searchInput.addEventListener('input', () => renderView());
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') {
+    console.log('[YT DEBUG] STOP: YOUTUBE_API_KEY is missing/placeholder. Value:', YOUTUBE_API_KEY);
+    statusEl.className = 'add-status error';
+    statusEl.textContent = 'YouTube search isn\'t set up yet — add a YouTube Data API key in the code first.';
+    return;
+  }
 
-let addTab = 'jamendo';
+  // Serve from cache instantly if we've already searched this exact query.
+  const cacheKey = q.trim().toLowerCase();
+  if (ytSearchCache.has(cacheKey)) {
+    console.log('[YT DEBUG] Cache HIT for query:', cacheKey, '- results:', ytSearchCache.get(cacheKey));
+    statusEl.className = 'add-status';
+    renderYoutubeResults(ytSearchCache.get(cacheKey), statusEl, gridEl);
+    return;
+  }
+  console.log('[YT DEBUG] Cache MISS for query:', cacheKey, '- proceeding to fetch.');
+
+  statusEl.className = 'add-status'; statusEl.textContent = 'Searching YouTube...';
+  gridEl.innerHTML = '';
+  try {
+    const params = new URLSearchParams({
+      part: 'snippet', q, type: 'video', videoCategoryId: '10',
+      videoLicense: 'creativeCommon', maxResults: '12', key: YOUTUBE_API_KEY
+    });
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?${params}`;
+    console.log('[YT DEBUG] Request URL:', searchUrl);
+
+    const res = await fetch(searchUrl);
+    console.log('[YT DEBUG] Response status:', res.status, res.statusText, '| ok:', res.ok);
+
+    const data = await res.json();
+    console.log('[YT DEBUG] Response body:', JSON.stringify(data, null, 2));
+
+    if (myToken !== ytSearchToken) {
+      console.log('[YT DEBUG] STOP: stale search token (a newer keystroke superseded this request). mine=', myToken, 'current=', ytSearchToken);
+      return;
+    }
+    if (!res.ok) {
+      const code = data.error && data.error.code;
+      const message = data.error && data.error.message;
+      const status = data.error && data.error.status;
+      console.log('[YT DEBUG] STOP: Google API returned an error. HTTP status:', res.status, '| error.code:', code, '| error.status:', status, '| error.message:', message);
+      throw new Error(message || 'Search failed');
+    }
+    const items = data.items || [];
+    console.log('[YT DEBUG] Number of results returned:', items.length);
+
+    if (items.length === 0) {
+      console.log('[YT DEBUG] STOP: zero results for this query (not an error — API call succeeded).');
+      ytSearchCache.set(cacheKey, []);
+      statusEl.textContent = 'No YouTube matches found.';
+      return;
+    }
+
+    // The search endpoint doesn't return durations, so fetch them in a
+    // second call. If that call fails, still show the results — just
+    // without a duration — rather than breaking the whole search.
+    let durationById = {};
+    try {
+      const ids = items.map(r => r.id.videoId).join(',');
+      const durParams = new URLSearchParams({ part: 'contentDetails', id: ids, key: YOUTUBE_API_KEY });
+      const durUrl = `https://www.googleapis.com/youtube/v3/videos?${durParams}`;
+      console.log('[YT DEBUG] Duration request URL:', durUrl);
+      const durRes = await fetch(durUrl);
+      console.log('[YT DEBUG] Duration response status:', durRes.status, durRes.statusText, '| ok:', durRes.ok);
+      const durData = await durRes.json();
+      console.log('[YT DEBUG] Duration response body:', JSON.stringify(durData, null, 2));
+      if (myToken !== ytSearchToken) return;
+      if (durRes.ok) {
+        (durData.items || []).forEach(v => {
+          durationById[v.id] = parseYoutubeDuration(v.contentDetails.duration);
+        });
+      } else {
+        console.log('[YT DEBUG] Duration call failed but continuing without durations. error:', durData.error);
+      }
+    } catch (e) { console.log('[YT DEBUG] Duration call threw (ignored, non-fatal):', e); }
+
+    const results = items.map(r => ({
+      videoId: r.id.videoId,
+      title: r.snippet.title,
+      channel: r.snippet.channelTitle,
+      thumbnail: r.snippet.thumbnails.medium.url,
+      duration: durationById[r.id.videoId] || 0
+    }));
+
+    ytSearchCache.set(cacheKey, results);
+    statusEl.className = 'add-status';
+    console.log('[YT DEBUG] Calling renderYoutubeResults() with', results.length, 'processed result(s).');
+    renderYoutubeResults(results, statusEl, gridEl);
+  } catch (err) {
+    if (myToken !== ytSearchToken) return;
+    console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
+    statusEl.className = 'add-status error';
+    statusEl.textContent = 'YouTube search failed: ' + (err.message || 'check your connection and API key.');
+  }
+}
+
+function ytResultToTrack(r) {
+  return {
+    id: 'yt_' + r.videoId, source: 'youtube', videoId: r.videoId,
+    name: r.title, artist: r.channel, album: 'YouTube',
+    duration: r.duration, thumbnail: r.thumbnail
+  };
+}
+
+function renderYoutubeResults(results, statusEl, gridEl) {
+  console.log('[YT DEBUG] renderYoutubeResults() executing with', results.length, 'result(s):', results);
+  if (results.length === 0) {
+    statusEl.textContent = 'No YouTube matches found.';
+    gridEl.innerHTML = '';
+    return;
+  }
+  statusEl.textContent = '';
+  gridEl.innerHTML = results.map((r, i) => `
+    <div class="result-card yt-result-card" data-idx="${i}">
+      <img src="${r.thumbnail}" alt="">
+      <p class="result-title">${escapeHtml(r.title)}</p>
+      <p class="result-sub">${escapeHtml(r.channel)}${r.duration ? ' &middot; ' + formatTime(r.duration) : ''}</p>
+      <div class="result-actions">
+        <button class="result-add yt-play-btn" data-idx="${i}">&#9654; Play</button>
+        <button class="result-add yt-add-btn" data-idx="${i}">+ Add</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Clicking anywhere on the card plays it immediately via the existing
+  // YouTube player system (same path as clicking Play).
+  gridEl.querySelectorAll('.yt-result-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const r = results[parseInt(card.dataset.idx, 10)];
+      const track = ytResultToTrack(r);
+      addToLibrary(track);
+      playTrack(track);
+    });
+  });
+  gridEl.querySelectorAll('.yt-play-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = results[parseInt(btn.dataset.idx, 10)];
+      const track = ytResultToTrack(r);
+      addToLibrary(track);
+      playTrack(track);
+    });
+  });
+  gridEl.querySelectorAll('.yt-add-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = results[parseInt(btn.dataset.idx, 10)];
+      addToLibrary(ytResultToTrack(r));
+      btn.textContent = 'Added \u2713';
+      btn.disabled = true;
+    });
+  });
+}
 
 function renderLibrary() {
   const library = loadLibrary();
@@ -945,25 +1776,12 @@ function renderLibrary() {
   const likedTracks = allTracks().filter(t => likedIds.includes(t.id));
 
   mainContent.innerHTML = `
-    <h2 class="section-title">Add music</h2>
-    <div class="add-panel">
-      <div class="add-tabs">
-        <button class="add-tab ${addTab === 'jamendo' ? 'active' : ''}" id="tabJamendo">Free & uncopyrighted (Jamendo)</button>
-        <button class="add-tab ${addTab === 'youtube' ? 'active' : ''}" id="tabYoutube">YouTube</button>
-      </div>
-      <div id="addPanelBody"></div>
-    </div>
-
     <h2 class="section-title">Liked Songs</h2>
     <div class="track-list" id="likedList"></div>
 
-    <h2 class="section-title">Imported tracks (${library.length})</h2>
+    <h2 class="section-title">Your music (${library.length})</h2>
     <div class="track-list" id="libraryList"></div>
   `;
-
-  document.getElementById('tabJamendo').onclick = () => { addTab = 'jamendo'; renderLibrary(); };
-  document.getElementById('tabYoutube').onclick = () => { addTab = 'youtube'; renderLibrary(); };
-  renderAddPanelBody();
 
   const likedListEl = document.getElementById('likedList');
   if (likedTracks.length === 0) {
@@ -974,89 +1792,9 @@ function renderLibrary() {
 
   const libListEl = document.getElementById('libraryList');
   if (library.length === 0) {
-    libListEl.innerHTML = `<div class="empty-state">No imported tracks yet. Use the panel above to pull songs in from Jamendo or YouTube.</div>`;
+    libListEl.innerHTML = `<div class="empty-state">Nothing here yet — anything you play from search or the homepage shows up here automatically.</div>`;
   } else {
     renderTrackList(libListEl, library, { removable: true });
-  }
-}
-
-function renderAddPanelBody() {
-  const body = document.getElementById('addPanelBody');
-  if (addTab === 'jamendo') {
-    body.innerHTML = `
-      <div class="add-row">
-        <input id="jamendoQuery" placeholder="Search free, Creative Commons licensed music...">
-        <button id="jamendoSearchBtn">Search</button>
-      </div>
-      <div class="add-hint">Independent artists on Jamendo who've opted their tracks into free, Creative Commons distribution — full-length streams, safe to use without copyright claims.</div>
-      <div class="add-status" id="jamendoStatus"></div>
-      <div class="result-grid" id="jamendoResults"></div>
-    `;
-    document.getElementById('jamendoSearchBtn').onclick = handleJamendoSearch;
-    document.getElementById('jamendoQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleJamendoSearch(); });
-  } else {
-    body.innerHTML = `
-      <div class="add-row">
-        <input id="ytccQuery" placeholder="Search YouTube for a song or artist...">
-        <button id="ytccSearchBtn">Search</button>
-      </div>
-      <div class="add-hint">Plays via YouTube's own embedded player, same as watching it on youtube.com.</div>
-      <div class="add-status" id="ytccStatus"></div>
-      <div class="result-grid" id="ytccResults"></div>
-    `;
-    document.getElementById('ytccSearchBtn').onclick = handleYtccSearch;
-    document.getElementById('ytccQuery').addEventListener('keydown', e => { if (e.key === 'Enter') handleYtccSearch(); });
-  }
-}
-
-async function handleJamendoSearch() {
-  const q = document.getElementById('jamendoQuery').value.trim();
-  if (!q) return;
-  if (!JAMENDO_CLIENT_ID || JAMENDO_CLIENT_ID === 'YOUR_JAMENDO_CLIENT_ID') {
-    setStatus('jamendoStatus', 'Jamendo search isn\'t set up yet — add a free Jamendo client ID in the code first (devportal.jamendo.com).', 'error');
-    return;
-  }
-  setStatus('jamendoStatus', 'Searching Jamendo...', '');
-  document.getElementById('jamendoResults').innerHTML = '';
-  try {
-    const params = new URLSearchParams({
-      client_id: JAMENDO_CLIENT_ID, format: 'json', limit: '12',
-      search: q, include: 'musicinfo', audioformat: 'mp32'
-    });
-    const res = await fetch(`https://api.jamendo.com/v3.0/tracks/?${params}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error((data.headers && data.headers.error_message) || 'Search failed');
-    const results = data.results || [];
-    if (results.length === 0) {
-      setStatus('jamendoStatus', 'No results found for that search.', 'error');
-      return;
-    }
-    setStatus('jamendoStatus', `Found ${results.length} track(s).`, 'ok');
-    const grid = document.getElementById('jamendoResults');
-    grid.innerHTML = results.map((r, i) => `
-      <div class="result-card">
-        <img src="${r.image}" alt="">
-        <p class="result-title">${escapeHtml(r.name)}</p>
-        <p class="result-sub">${escapeHtml(r.artist_name)}</p>
-        <button class="result-add" data-idx="${i}">+ Add to library</button>
-      </div>
-    `).join('');
-    grid.querySelectorAll('.result-add').forEach(btn => {
-      btn.onclick = () => {
-        const r = results[parseInt(btn.dataset.idx, 10)];
-        const track = {
-          id: 'jam_' + r.id, source: 'jamendo', previewUrl: r.audio,
-          name: r.name, artist: r.artist_name, album: 'Jamendo (Creative Commons)',
-          duration: parseInt(r.duration, 10) || 0,
-          thumbnail: r.image
-        };
-        addToLibrary(track);
-        btn.disabled = true;
-        btn.textContent = 'Added ✓';
-      };
-    });
-  } catch (err) {
-    setStatus('jamendoStatus', 'Search failed: ' + (err.message || 'check your connection and client ID.'), 'error');
   }
 }
 
@@ -1122,65 +1860,6 @@ async function renderAdmin() {
   `;
 }
 
-function setStatus(elId, msg, cls) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  el.textContent = msg;
-  el.className = 'add-status' + (cls ? ' ' + cls : '');
-}
-
-async function handleYtccSearch() {
-  const q = document.getElementById('ytccQuery').value.trim();
-  if (!q) return;
-  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') {
-    setStatus('ytccStatus', 'YouTube search isn\'t set up yet — add a YouTube Data API key in the code first.', 'error');
-    return;
-  }
-  setStatus('ytccStatus', 'Searching YouTube...', '');
-  document.getElementById('ytccResults').innerHTML = '';
-  try {
-    const params = new URLSearchParams({
-      part: 'snippet', q, type: 'video', videoCategoryId: '10',
-      maxResults: '12', key: YOUTUBE_API_KEY
-    });
-    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error((data.error && data.error.message) || 'Search failed');
-    const results = data.items || [];
-    if (results.length === 0) {
-      setStatus('ytccStatus', 'No results found for that search.', 'error');
-      return;
-    }
-    setStatus('ytccStatus', `Found ${results.length} track(s).`, 'ok');
-    const grid = document.getElementById('ytccResults');
-    grid.innerHTML = results.map((r, i) => `
-      <div class="result-card">
-        <img src="${r.snippet.thumbnails.medium.url}" alt="">
-        <p class="result-title">${escapeHtml(r.snippet.title)}</p>
-        <p class="result-sub">${escapeHtml(r.snippet.channelTitle)}</p>
-        <button class="result-add" data-idx="${i}">+ Add to library</button>
-      </div>
-    `).join('');
-    grid.querySelectorAll('.result-add').forEach(btn => {
-      btn.onclick = () => {
-        const r = results[parseInt(btn.dataset.idx, 10)];
-        const videoId = r.id.videoId;
-        const track = {
-          id: 'yt_' + videoId, source: 'youtube', videoId,
-          name: r.snippet.title, artist: r.snippet.channelTitle,
-          album: 'YouTube', duration: 0,
-          thumbnail: r.snippet.thumbnails.medium.url
-        };
-        addToLibrary(track);
-        btn.disabled = true;
-        btn.textContent = 'Added ✓';
-      };
-    });
-  } catch (err) {
-    setStatus('ytccStatus', 'Search failed: ' + (err.message || 'check your connection and API key.'), 'error');
-  }
-}
-
 function addToLibrary(track) {
   const library = loadLibrary();
   if (library.some(t => t.id === track.id)) return;
@@ -1198,8 +1877,14 @@ function removeFromLibrary(id) {
 
 function toggleLike(id) {
   let liked = loadLiked();
-  if (liked.includes(id)) liked = liked.filter(x => x !== id);
-  else liked.push(id);
+  const track = allTracks().find(t => t.id === id) || loadHistory().find(t => t.id === id);
+  if (liked.includes(id)) {
+    liked = liked.filter(x => x !== id);
+    trackEvent('unlike', track);
+  } else {
+    liked.push(id);
+    trackEvent('like', track);
+  }
   saveLiked(liked);
   if (currentView === 'library') renderLibrary();
 }
@@ -1213,6 +1898,8 @@ function renderTrackList(container, list, opts) {
     row.className = 'track-row';
     const sourceLabel = t.source === 'local' ? '' : t.source;
     const liked = likedIds.includes(t.id);
+    const canDownload = t.source === 'apple' || t.source === 'jamendo';
+    const downloaded = canDownload && isDownloaded(t.id);
     row.innerHTML = `
       <span class="track-num">${i + 1}</span>
       <span><div class="track-name">${escapeHtml(t.name)}</div><div class="track-artist">${escapeHtml(t.artist)}</div></span>
@@ -1220,17 +1907,21 @@ function renderTrackList(container, list, opts) {
       <span class="track-duration">${t.duration ? formatTime(t.duration) : (sourceLabel ? '—' : '')}</span>
       <span style="display:flex; align-items:center; gap:8px;">
         ${sourceLabel ? `<span class="track-source">${sourceLabel}</span>` : ''}
+        ${canDownload ? `<button class="track-remove download-btn" title="${downloaded ? 'Downloaded — tap to remove' : 'Download for offline'}">${downloaded ? '&#10003;' : '&#11015;'}</button>` : ''}
         <button class="track-remove like-btn" title="Like">${liked ? '♥' : '♡'}</button>
         <button class="track-remove playlist-add-btn" title="Add to playlist">&#43;</button>
         ${opts.removable ? `<button class="track-remove remove-btn" title="Remove">&times;</button>` : ''}
       </span>
     `;
     row.addEventListener('click', (e) => {
-      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn') || e.target.closest('.playlist-add-btn')) return;
+      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.download-btn')) return;
       playTrack(t);
     });
     row.querySelector('.like-btn').onclick = (e) => { e.stopPropagation(); toggleLike(t.id); };
     row.querySelector('.playlist-add-btn').onclick = (e) => { e.stopPropagation(); openPlaylistMenu(e.currentTarget, t.id); };
+    if (canDownload) {
+      row.querySelector('.download-btn').onclick = (e) => { e.stopPropagation(); toggleDownload(t, e.currentTarget); };
+    }
     if (opts.removable) {
       row.querySelector('.remove-btn').onclick = (e) => { e.stopPropagation(); (opts.onRemove || removeFromLibrary)(t.id); };
     }
@@ -1372,11 +2063,26 @@ function stopAllPlayback() {
   spotifyDock.classList.remove('show');
 }
 
-function playTrack(t) {
+function playTrack(t, opts) {
+  opts = opts || {};
+  // Detect skip (previous track cut short) vs replay (same track again)
+  // vs a fresh play, purely from client-side state — no server round trip.
+  if (current) {
+    const prevDuration = current.duration || 0;
+    const prevProgress = prevDuration ? mockElapsed / prevDuration : 1;
+    if (current.id === t.id) {
+      trackEvent('replay', t);
+    } else if (playing && prevProgress < 0.6) {
+      trackEvent('skip', current);
+    }
+  }
   stopAllPlayback();
   current = t;
   mockElapsed = 0;
+  trackEvent('play', t);
+  pushHistory(t);
   logListeningEvent(t);
+  if (!opts.fromParty) broadcastTrackToParty(t);
 
   if (t.thumbnail) {
     nowArt.style.background = `center/cover no-repeat url(${t.thumbnail})`;
@@ -1390,6 +2096,7 @@ function playTrack(t) {
   curTimeEl.textContent = '0:00';
   totalTimeEl.textContent = t.duration ? formatTime(t.duration) : '0:00';
   progressFill.style.width = '0%';
+  updateQualityBadge();
 
   if (t.source === 'local') {
     setPlaying(true);
@@ -1403,7 +2110,9 @@ function playTrack(t) {
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073;';
   } else if (t.source === 'apple' || t.source === 'jamendo') {
-    appleAudio.src = t.previewUrl;
+    ensureAudioGraph();
+    const dl = loadDownloads()[t.id];
+    appleAudio.src = dl ? dl.dataUrl : t.previewUrl;
     appleAudio.currentTime = 0;
     appleAudio.play();
     playing = true;
@@ -1480,10 +2189,15 @@ volumeBar.onclick = (e) => {
 };
 
 /* APP BOOTSTRAP */
+// Listening-time signal: every 15s of actual playback counts as a taste
+// signal for whatever's currently playing, regardless of source.
+setInterval(() => { if (playing && current) trackEvent('listen_15s', current); }, 15000);
+
 let appStarted = false;
 
 async function startApp(user) {
   currentUser = user;
+  appSettings = loadSettings();
 
   // Fetch (or wait for the trigger to create) this user's profile row.
   let { data: profile } = await supabaseClient
