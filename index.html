@@ -282,6 +282,20 @@
   #spotifyDock .dock-head button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
   #spotifyEmbedFrame { width: 100%; height: 152px; border: none; display: block; }
 
+  #videoDock {
+    position: fixed; right: 16px; bottom: 96px;
+    width: 360px; background: #150c17; border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: none; z-index: 50;
+  }
+  #videoDock.show { display: block; }
+  #videoDock .dock-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px; font-size: 11px; color: var(--text-dim);
+  }
+  #videoDock .dock-head button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
+  #videoDock .video-frame-wrap { width: 100%; aspect-ratio: 16/9; background: #000; }
+
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -406,6 +420,8 @@
   .lyrics-panel-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
   .lyrics-panel-close:hover { color: var(--text); }
   .lyrics-panel-body { padding: 14px 16px; overflow-y: auto; white-space: pre-line; font-size: 13px; line-height: 1.8; color: var(--text); }
+  .lyric-line { margin: 0 0 10px; color: var(--text-dim); transition: color 0.2s, transform 0.2s; }
+  .lyric-line.active { color: var(--accent); font-weight: 700; transform: scale(1.03); transform-origin: left center; }
   .lyrics-loading { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; }
   .lyrics-spinner {
     width: 14px; height: 14px; border-radius: 50%;
@@ -420,6 +436,7 @@
     font-size: 12px; margin-bottom: 14px; width: fit-content;
   }
 </style>
+<link rel="manifest" href="manifest.json">
 </head>
 <body>
 
@@ -478,6 +495,7 @@
       <button class="modal-tab" data-tab="audio">Audio</button>
       <button class="modal-tab" data-tab="friends">Friends &amp; Listen Together</button>
       <button class="modal-tab" data-tab="account">Account</button>
+      <button class="modal-tab" data-tab="feedback">Feedback</button>
     </div>
     <div id="settingsBody"></div>
   </div>
@@ -514,7 +532,7 @@
   <div class="main">
     <div id="partyBanner"></div>
     <div class="topbar">
-      <input class="search" id="searchInput" placeholder="Search songs, artists, albums, or YouTube..." style="width:100%;">
+      <input class="search" id="searchInput" placeholder="Search songs, artists, or albums..." style="width:100%;">
     </div>
     <div id="mainContent"></div>
   </div>
@@ -527,6 +545,7 @@
         <div class="now-artist" id="nowArtist">Pick a track to start</div>
       </div>
       <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
+      <button id="watchVideoBtn" class="lyrics-toggle-btn" title="Watch video" style="display:none;">&#127909; Watch</button>
       <button id="lyricsBtn" class="lyrics-toggle-btn" title="Lyrics">&#127925; Lyrics</button>
     </div>
     <div id="lyricsPanel" class="lyrics-panel">
@@ -567,7 +586,11 @@
 
 </div>
 
-<div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0;"></div>
+<div id="videoDockHead" style="display:none; position:fixed; right:16px; bottom:326px; width:360px; z-index:51; background:#150c17; border:1px solid var(--border); border-bottom:none; border-radius:10px 10px 0 0; padding:6px 10px; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-dim);">
+  <span id="videoDockTitle">Watching</span>
+  <button id="videoDockClose" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:13px;">&times;</button>
+</div>
+<div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0; right:16px; bottom:96px; z-index:50; border-radius:0 0 10px 10px; box-shadow:0 8px 24px rgba(0,0,0,0.5); background:#000;"></div>
 <audio id="applePreviewAudio" preload="none"></audio>
 
 <script>
@@ -889,6 +912,43 @@ function renderSettingsTab(tab) {
     `;
     document.getElementById('settingsSwitchAccountBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
     document.getElementById('settingsLogoutBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
+  } else if (tab === 'feedback') {
+    settingsBody.innerHTML = `
+      <p class="card-sub" style="margin:0 0 10px;">Bug, broken song, feature idea — whatever. Goes straight into the feedback log.</p>
+      <select id="feedbackType" class="auth-input" style="margin-bottom:10px;">
+        <option value="bug">Something's broken</option>
+        <option value="idea">Feature idea</option>
+        <option value="other">Other</option>
+      </select>
+      <textarea id="feedbackText" class="auth-input" rows="5" placeholder="What's going on?" style="resize:vertical; width:100%; font-family:inherit;"></textarea>
+      <button class="add-btn" id="feedbackSubmitBtn" style="margin-top:10px;">Send feedback</button>
+      <div class="add-status" id="feedbackStatus" style="margin-top:10px;"></div>
+    `;
+    document.getElementById('feedbackSubmitBtn').onclick = async () => {
+      const text = document.getElementById('feedbackText').value.trim();
+      const type = document.getElementById('feedbackType').value;
+      const statusEl = document.getElementById('feedbackStatus');
+      if (!text) { statusEl.className = 'add-status error'; statusEl.textContent = 'Type something first.'; return; }
+      statusEl.className = 'add-status'; statusEl.textContent = 'Sending…';
+      try {
+        // Also bundles the last few local playback failures — useful
+        // context for "some songs aren't working" reports without
+        // needing the person to describe exactly which ones.
+        const recentFailures = JSON.parse(localStorage.getItem('streamplay_playback_failures') || '[]').slice(-5);
+        const { error } = await supabaseClient.from('feedback').insert({
+          user_id: currentUser ? currentUser.id : null,
+          type, message: text,
+          context: { recentFailures, userAgent: navigator.userAgent }
+        });
+        if (error) throw error;
+        statusEl.className = 'add-status success';
+        statusEl.textContent = 'Sent — thanks!';
+        document.getElementById('feedbackText').value = '';
+      } catch (e) {
+        statusEl.className = 'add-status error';
+        statusEl.textContent = e.message && e.message.includes('relation') ? 'Feedback table isn\'t set up yet — see the SQL in the project notes.' : ('Couldn\'t send: ' + (e.message || e));
+      }
+    };
   }
 }
 
@@ -2385,6 +2445,64 @@ async function fetchLyrics(track) {
   return null;
 }
 
+/* ---- Synced lyrics (LRCLIB — free, no key, CORS-enabled) ----
+   Tried first: if it has line-by-line timestamps for this track, we
+   render karaoke-style highlighting. Falls back to lyrics.ovh's plain
+   text, then the Genius link-out, same as before. */
+function parseLRC(lrcText) {
+  const lines = [];
+  (lrcText || '').split('\n').forEach(line => {
+    const m = line.match(/^\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\](.*)$/);
+    if (!m) return;
+    const time = parseInt(m[1], 10) * 60 + parseFloat(m[2]);
+    const text = m[3].trim();
+    if (text) lines.push({ time, text });
+  });
+  return lines.sort((a, b) => a.time - b.time);
+}
+async function fetchSyncedLyricsOnce(artist, title) {
+  try {
+    const params = new URLSearchParams({ track_name: title, artist_name: artist });
+    const res = await fetch(`https://lrclib.net/api/search?${params}`);
+    if (!res.ok) return null;
+    const results = await res.json();
+    if (!Array.isArray(results) || !results.length) return null;
+    return results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || null;
+  } catch (e) {
+    console.warn('[LRCLIB] fetch failed:', e.message);
+    return null;
+  }
+}
+async function fetchSyncedLyrics(track) {
+  for (const c of lyricsCandidates(track)) {
+    if (!c.artist || !c.title) continue;
+    const result = await fetchSyncedLyricsOnce(c.artist, c.title);
+    if (result && result.syncedLyrics) return { synced: parseLRC(result.syncedLyrics), plain: result.plainLyrics || null };
+    if (result && result.plainLyrics) return { synced: null, plain: result.plainLyrics };
+  }
+  return null;
+}
+
+// Drives the karaoke-style highlight. Called from both the <audio>
+// timeupdate handler (Apple/Jamendo) and the YouTube progress-poll
+// interval, so it works regardless of playback source.
+let currentLyricsLines = null;
+function updateLyricsHighlight(t) {
+  if (!currentLyricsLines || !lyricsPanelOpen) return;
+  let activeIdx = -1;
+  for (let i = 0; i < currentLyricsLines.length; i++) {
+    if (currentLyricsLines[i].time <= t) activeIdx = i; else break;
+  }
+  const body = document.getElementById('lyricsPanelBody');
+  if (!body) return;
+  const prev = body.querySelector('.lyric-line.active');
+  if (prev) prev.classList.remove('active');
+  if (activeIdx >= 0) {
+    const el = document.getElementById('lyricLine' + activeIdx);
+    if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  }
+}
+
 /* Fallback when lyrics.ovh has nothing: ask the streamplay-ai edge
    function to check Genius for a confirmed match. Genius's API doesn't
    return lyrics text (by their own design, for licensing reasons), and
@@ -2409,6 +2527,7 @@ async function refreshLyricsPanel() {
   const subEl = document.getElementById('lyricsPanelSub');
   const bodyEl = document.getElementById('lyricsPanelBody');
   if (!titleEl) return;
+  currentLyricsLines = null;
   if (!current) {
     titleEl.textContent = 'Lyrics';
     subEl.textContent = '';
@@ -2419,13 +2538,32 @@ async function refreshLyricsPanel() {
   subEl.textContent = current.artist;
   bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Finding lyrics…</div>`;
   const myToken = ++lyricsRequestToken;
+
+  // Try synced (LRCLIB) first — karaoke-style highlighting if it has one.
+  const syncedResult = await fetchSyncedLyrics(current);
+  if (myToken !== lyricsRequestToken) return;
+  if (syncedResult && syncedResult.synced && syncedResult.synced.length) {
+    currentLyricsLines = syncedResult.synced;
+    bodyEl.innerHTML = syncedResult.synced
+      .map((l, i) => `<p class="lyric-line" id="lyricLine${i}">${escapeHtml(l.text)}</p>`)
+      .join('');
+    const t = current.source === 'youtube' && ytPlayer && ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : appleAudio.currentTime;
+    updateLyricsHighlight(t || 0);
+    return;
+  }
+  if (syncedResult && syncedResult.plain) {
+    bodyEl.innerHTML = escapeHtml(syncedResult.plain).replace(/\n/g, '<br>');
+    return;
+  }
+
+  // LRCLIB had nothing at all — fall back to lyrics.ovh (plain text only).
   const lyrics = await fetchLyrics(current);
   if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
   if (lyrics) {
     bodyEl.innerHTML = escapeHtml(lyrics).replace(/\n/g, '<br>');
     return;
   }
-  // lyrics.ovh came up empty — try Genius for a confirmed match card.
+  // Nothing anywhere — try Genius for a confirmed match card.
   const geniusMatch = await fetchGeniusMatch(current.artist, current.name);
   if (myToken !== lyricsRequestToken) return;
   if (geniusMatch && geniusMatch.url) {
@@ -2462,6 +2600,34 @@ document.getElementById('spotifyDockClose').onclick = () => {
   if (current && current.source === 'spotify') setPlaying(false);
 };
 
+// Video-watch mode. The YT player element is REPOSITIONED via inline
+// style, never hidden with display:none — a display:none iframe can
+// stop YouTube playback in some browsers, and this app relies on the
+// player staying "technically visible" (1x1, opacity 0) to keep audio
+// going while parked off-screen the rest of the time.
+let videoWatchMode = false;
+const ytHolder = document.getElementById('ytPlayerHolder');
+const videoDockHead = document.getElementById('videoDockHead');
+function setVideoWatchMode(on) {
+  videoWatchMode = on && current && current.source === 'youtube';
+  if (videoWatchMode) {
+    ytHolder.style.width = '360px';
+    ytHolder.style.height = '202px';
+    ytHolder.style.opacity = '1';
+    videoDockHead.style.display = 'flex';
+    document.getElementById('videoDockTitle').textContent = 'Watching · ' + current.name;
+    document.getElementById('watchVideoBtn').textContent = '\u25A0 Hide video';
+  } else {
+    ytHolder.style.width = '1px';
+    ytHolder.style.height = '1px';
+    ytHolder.style.opacity = '0';
+    videoDockHead.style.display = 'none';
+    document.getElementById('watchVideoBtn').textContent = '\uD83C\uDFA5 Watch';
+  }
+}
+document.getElementById('watchVideoBtn').onclick = () => setVideoWatchMode(!videoWatchMode);
+document.getElementById('videoDockClose').onclick = () => setVideoWatchMode(false);
+
 let ytPlayer = null;
 let ytReady = false;
 let ytPendingVideoId = null;
@@ -2479,10 +2645,61 @@ window.onYouTubeIframeAPIReady = function() {
         ytReady = true;
         if (ytPendingVideoId) { ytPlayer.loadVideoById(ytPendingVideoId); ytPendingVideoId = null; }
       },
-      onStateChange: onYTStateChange
+      onStateChange: onYTStateChange,
+      onError: onYTError
     }
   });
 };
+// Common causes a track "doesn't work": 2=bad video id, 5=HTML5 player
+// error, 100=video removed/private, 101/150=embedding disabled by the
+// uploader (very common for major-label official audio). We can't work
+// around 101/150 — that's the rights holder's own setting — but we can
+// at least tell the person clearly instead of leaving a dead player, and
+// move on to the next queued track automatically.
+function onYTError(e) {
+  if (!current || current.source !== 'youtube') return;
+  const reasons = {
+    2: 'invalid video', 5: 'playback error', 100: 'video removed or private',
+    101: 'embedding disabled by the uploader', 150: 'embedding disabled by the uploader'
+  };
+  const reason = reasons[e.data] || 'unknown playback error';
+  console.warn('[YT] Playback failed for', current.name, '-', reason);
+  showToast(`Can't play "${current.name}" — ${reason}`);
+  playing = false;
+  playBtn.innerHTML = '&#9654;';
+  stopProgressPolling();
+  logPlaybackFailure(current, reason);
+}
+
+// Lightweight toast — no queue/next-track system exists in this app yet,
+// so a failed track just stops playback with a clear reason instead of
+// silently sitting there.
+function showToast(message) {
+  let el = document.getElementById('appToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'appToast';
+    el.style.cssText = 'position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:#1a0f1c; border:1px solid var(--border); color:var(--text); padding:10px 16px; border-radius:8px; font-size:13px; z-index:9999; max-width:80vw; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.style.opacity = '1';
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 4000);
+}
+
+// Keeps a rolling local log of playback failures (source, reason,
+// timestamp). This is the raw material an "AI monitoring" pass could
+// later summarize — see the note in chat about what that feature should
+// actually do before it's built further.
+function logPlaybackFailure(track, reason) {
+  try {
+    const key = 'streamplay_playback_failures';
+    const log = JSON.parse(localStorage.getItem(key) || '[]');
+    log.push({ name: track.name, artist: track.artist, source: track.source, reason, at: Date.now() });
+    localStorage.setItem(key, JSON.stringify(log.slice(-200)));
+  } catch (e) { /* non-critical */ }
+}
 function onYTStateChange(e) {
   if (!current || current.source !== 'youtube') return;
   if (e.data === YT.PlayerState.PLAYING) {
@@ -2542,6 +2759,7 @@ appleAudio.addEventListener('timeupdate', () => {
   const dur = appleAudio.duration || current.duration || 30;
   progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
   if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
+  updateLyricsHighlight(appleAudio.currentTime);
 });
 appleAudio.addEventListener('ended', () => {
   if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
@@ -2561,6 +2779,7 @@ function startProgressPolling() {
       totalTimeEl.textContent = formatTime(dur);
       progressFill.style.width = ((cur / dur) * 100) + '%';
     }
+    updateLyricsHighlight(cur);
   }, 500);
 }
 function stopProgressPolling() { clearInterval(progressTimer); }
@@ -2609,6 +2828,15 @@ function playTrack(t, opts) {
   totalTimeEl.textContent = t.duration ? formatTime(t.duration) : '0:00';
   progressFill.style.width = '0%';
   updateQualityBadge();
+
+  const watchBtn = document.getElementById('watchVideoBtn');
+  if (t.source === 'youtube') {
+    watchBtn.style.display = '';
+    if (videoWatchMode) setVideoWatchMode(true); // stay in watch mode, just retitle for the new track
+  } else {
+    watchBtn.style.display = 'none';
+    if (videoWatchMode) setVideoWatchMode(false); // non-YouTube tracks have nothing to show in the dock
+  }
 
   if (t.source === 'local') {
     setPlaying(true);
@@ -2764,6 +2992,13 @@ async function startApp(user) {
 supabaseClient.auth.getSession().then(({ data: { session } }) => {
   if (session && session.user) startApp(session.user);
 });
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(e => console.warn('SW registration failed:', e));
+  });
+}
 </script>
 </body>
 </html>
