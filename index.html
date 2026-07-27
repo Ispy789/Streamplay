@@ -383,6 +383,58 @@
   .lyrics-panel-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
   .lyrics-panel-close:hover { color: var(--text); }
   .lyrics-panel-body { padding: 14px 16px; overflow-y: auto; white-space: pre-line; font-size: 13px; line-height: 1.8; color: var(--text); }
+  .lyrics-toolbar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .lyrics-toolbar.show { display: flex; }
+  .lyrics-lang-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+  .lyrics-lang-select:focus { outline: none; border-color: var(--accent-dim); }
+  .lyrics-mini-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .lyrics-mini-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent-dim); }
+  .lyrics-mini-btn:disabled { opacity: 0.6; cursor: default; }
+  .lyrics-ai-badge {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin-bottom: 10px;
+  }
+  .lyrics-ai-disclaimer {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 6px 0 12px;
+    line-height: 1.5;
+  }
   .genre-chip {
     background: var(--bg-panel);
     border: 1px solid var(--border);
@@ -537,6 +589,24 @@
           <div class="lyrics-panel-sub" id="lyricsPanelSub"></div>
         </div>
         <button id="lyricsPanelClose" class="lyrics-panel-close" title="Close">&times;</button>
+      </div>
+      <div class="lyrics-toolbar" id="lyricsToolbar">
+        <select id="lyricsLangSelect" class="lyrics-lang-select">
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="it">Italian</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="zh">Chinese</option>
+          <option value="ar">Arabic</option>
+          <option value="hi">Hindi</option>
+          <option value="id">Indonesian</option>
+          <option value="ru">Russian</option>
+        </select>
+        <button id="lyricsTranslateBtn" class="lyrics-mini-btn" title="AI-translate these lyrics">&#127760; Translate</button>
+        <button id="lyricsShowOriginalBtn" class="lyrics-mini-btn" style="display:none;">&#8617; Original</button>
       </div>
       <div class="lyrics-panel-body" id="lyricsPanelBody"></div>
     </div>
@@ -2345,6 +2415,16 @@ const lyricsCache = new Map(); // "artist|||title" -> string | null
 let lyricsPanelOpen = false;
 let lyricsRequestToken = 0;
 
+/* ---- AI translate + AI-generated-lyrics state ----
+   currentLyricsRaw holds whatever text is currently shown in the panel
+   (real lyrics.ovh text OR an AI-generated approximation), so both can
+   be fed to the AI translate action. translationCache is keyed per
+   track+language so flipping back and forth doesn't re-hit the model. */
+let currentLyricsRaw = null;      // the text currently eligible for translation
+let currentLyricsIsAI = false;    // was currentLyricsRaw itself AI-generated?
+let translationCache = new Map(); // "lang" -> translated string, for the current track
+let showingTranslation = false;
+
 /* YouTube video titles are messy ("Coldplay - Fix You (Official Video)",
    channel names like "ColdplayVEVO" or "Coldplay - Topic") — a literal
    lookup against those almost never matches a lyrics database. This
@@ -2419,6 +2499,93 @@ async function fetchGeniusFallback(track) {
   }
 }
 
+/* Asks the streamplay-ai edge function to translate whatever lyrics text
+   is currently on screen into the selected language. Requires the edge
+   function to support an action:'lyrics-translate' handler — this only
+   wires up the client side. */
+async function translateLyricsAI(text, targetLangCode, targetLangName) {
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { action: 'lyrics-translate', lyrics: text, target_lang: targetLangCode, target_lang_name: targetLangName }
+    });
+    if (error || !data) return null;
+    return data.translation || null;
+  } catch (e) {
+    console.warn('[Lyrics] AI translate failed:', e.message);
+    return null;
+  }
+}
+
+/* Best-effort AI reconstruction for tracks with no match in lyrics.ovh
+   or Genius. Clearly labeled as unofficial/AI-generated in the UI since
+   it's a model's approximation, not a licensed lyrics source. Requires
+   the edge function to support an action:'lyrics-ai-generate' handler. */
+async function generateAILyrics(track) {
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { action: 'lyrics-ai-generate', artist: track.artist, title: track.name }
+    });
+    if (error || !data) return null;
+    return data.lyrics || null;
+  } catch (e) {
+    console.warn('[Lyrics] AI lyrics generation failed:', e.message);
+    return null;
+  }
+}
+
+/* Renders whichever lyrics text (real or AI) is currently active, tags
+   it with a badge when it's AI-generated, and reveals the translate
+   toolbar so the person can flip it into another language. */
+function renderLyricsText(text, opts) {
+  opts = opts || {};
+  const bodyEl = document.getElementById('lyricsPanelBody');
+  const badge = opts.aiGenerated ? `<span class="lyrics-ai-badge">&#10024; AI-generated</span><div class="lyrics-ai-disclaimer">This isn't an official lyrics source — it's a best-effort AI approximation and may not match the real song exactly.</div>` : '';
+  bodyEl.innerHTML = badge + escapeHtml(text).replace(/\n/g, '<br>');
+  document.getElementById('lyricsToolbar').classList.add('show');
+  document.getElementById('lyricsShowOriginalBtn').style.display = 'none';
+  showingTranslation = false;
+}
+
+document.getElementById('lyricsTranslateBtn').onclick = async () => {
+  if (!currentLyricsRaw) return;
+  const select = document.getElementById('lyricsLangSelect');
+  const langCode = select.value;
+  const langName = select.options[select.selectedIndex].text;
+  const btn = document.getElementById('lyricsTranslateBtn');
+  const bodyEl = document.getElementById('lyricsPanelBody');
+  const myToken = lyricsRequestToken; // still tied to the track currently loaded
+
+  if (translationCache.has(langCode)) {
+    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + escapeHtml(translationCache.get(langCode)).replace(/\n/g, '<br>');
+    document.getElementById('lyricsShowOriginalBtn').style.display = '';
+    showingTranslation = true;
+    return;
+  }
+
+  btn.disabled = true;
+  const prevBtnText = btn.innerHTML;
+  btn.innerHTML = 'Translating…';
+  bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> AI is translating into ${escapeHtml(langName)}…</div>`;
+
+  const translated = await translateLyricsAI(currentLyricsRaw, langCode, langName);
+  btn.disabled = false;
+  btn.innerHTML = prevBtnText;
+  if (myToken !== lyricsRequestToken) return; // person moved to a different track meanwhile
+
+  if (translated) {
+    translationCache.set(langCode, translated);
+    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + escapeHtml(translated).replace(/\n/g, '<br>');
+    document.getElementById('lyricsShowOriginalBtn').style.display = '';
+    showingTranslation = true;
+  } else {
+    bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">Couldn't get an AI translation right now — try again in a moment.</p>`;
+  }
+};
+
+document.getElementById('lyricsShowOriginalBtn').onclick = () => {
+  if (currentLyricsRaw) renderLyricsText(currentLyricsRaw, { aiGenerated: currentLyricsIsAI });
+};
+
 async function refreshLyricsPanel() {
   const titleEl = document.getElementById('lyricsPanelTitle');
   const subEl = document.getElementById('lyricsPanelSub');
@@ -2433,11 +2600,21 @@ async function refreshLyricsPanel() {
   titleEl.textContent = current.name;
   subEl.textContent = current.artist;
   bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Finding lyrics…</div>`;
+
+  // Reset per-track AI state — a new track means old translations/AI text no longer apply.
+  currentLyricsRaw = null;
+  currentLyricsIsAI = false;
+  translationCache = new Map();
+  document.getElementById('lyricsToolbar').classList.remove('show');
+  document.getElementById('lyricsShowOriginalBtn').style.display = 'none';
+
   const myToken = ++lyricsRequestToken;
   const lyrics = await fetchLyrics(current);
   if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
   if (lyrics) {
-    bodyEl.innerHTML = escapeHtml(lyrics).replace(/\n/g, '<br>');
+    currentLyricsRaw = lyrics;
+    currentLyricsIsAI = false;
+    renderLyricsText(lyrics, { aiGenerated: false });
     return;
   }
   // No direct lyrics text — try Genius for at least a confirmed match + link.
@@ -2448,9 +2625,32 @@ async function refreshLyricsPanel() {
       <p class="empty-state" style="margin:0 0 10px;">Couldn't pull the lyrics text directly, but found a match:</p>
       <a href="${geniusMatch.url}" target="_blank" rel="noopener" class="add-btn" style="display:inline-block; text-decoration:none;">
         View "${escapeHtml(geniusMatch.title)}" on Genius &#8599;
-      </a>`;
+      </a>
+      <div style="margin-top:14px;">
+        <button id="lyricsAiGenBtn" class="lyrics-mini-btn">&#10024; Try AI lyrics instead</button>
+      </div>`;
   } else {
-    bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>`;
+    bodyEl.innerHTML = `
+      <p class="empty-state" style="margin:0 0 10px;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>
+      <button id="lyricsAiGenBtn" class="lyrics-mini-btn">&#10024; Try AI lyrics instead</button>`;
+  }
+
+  const aiGenBtn = document.getElementById('lyricsAiGenBtn');
+  if (aiGenBtn) {
+    aiGenBtn.onclick = async () => {
+      aiGenBtn.disabled = true;
+      aiGenBtn.textContent = 'Asking AI…';
+      const aiLyrics = await generateAILyrics(current);
+      if (myToken !== lyricsRequestToken) return;
+      if (aiLyrics) {
+        currentLyricsRaw = aiLyrics;
+        currentLyricsIsAI = true;
+        renderLyricsText(aiLyrics, { aiGenerated: true });
+      } else {
+        aiGenBtn.disabled = false;
+        aiGenBtn.textContent = "Couldn't generate AI lyrics — try again";
+      }
+    };
   }
 }
 
