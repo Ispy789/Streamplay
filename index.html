@@ -340,6 +340,30 @@
   .switch input:checked + .slider { background: var(--accent); }
   .switch input:checked + .slider:before { transform: translateX(18px); background: #1a0f1c; }
 
+  /* Audio FX (equalizer / spatial) panel */
+  .fx-presets { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 16px; }
+  .fx-preset-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  }
+  .fx-preset-btn.active { background: var(--accent); color: #1a0f1c; border-color: var(--accent); font-weight: 700; }
+  .fx-row { margin-bottom: 16px; }
+  .fx-row-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .fx-row-head span.fx-val { color: var(--text); font-weight: 600; }
+  .fx-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    border-radius: 2px; background: var(--border); outline: none; cursor: pointer;
+  }
+  .fx-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid #1a0f1c;
+  }
+  .fx-slider::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid #1a0f1c;
+  }
+  .fx-slider:disabled { opacity: 0.35; cursor: not-allowed; }
+  .fx-slider:disabled::-webkit-slider-thumb { background: var(--text-dim); }
+
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
 
@@ -765,6 +789,20 @@ document.querySelectorAll('.modal-tab').forEach(tab => {
   };
 });
 
+function fxDisplayValue(key, val) {
+  if (key === 'loudness') return (Math.round(val * 10) / 10) + 'x';
+  if (key === 'spatial') return Math.round(val) + '%';
+  return (val > 0 ? '+' : '') + Math.round(val * 10) / 10 + ' dB';
+}
+function fxSliderRow(key, label, min, max, val, unit) {
+  return `
+    <div class="fx-row">
+      <div class="fx-row-head"><span>${label}</span><span class="fx-val" id="fxval_${key}">${fxDisplayValue(key, val)}</span></div>
+      <input type="range" class="fx-slider" id="fx_${key}" min="${min}" max="${max}" step="0.5" value="${val}" ${appSettings.aiEnhance ? '' : 'disabled'}>
+    </div>
+  `;
+}
+
 function renderSettingsTab(tab) {
   if (tab === 'profile') {
     settingsBody.innerHTML = `
@@ -788,22 +826,57 @@ function renderSettingsTab(tab) {
       statusEl.className = 'add-status ok'; statusEl.textContent = 'Saved!';
     };
   } else if (tab === 'audio') {
+    const fx = appSettings.audioFX;
     settingsBody.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 0;">
         <div>
           <p class="card-title" style="margin:0 0 4px;">AI Audio Enhance</p>
-          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically — loudness normalization, bass boost, vocal clarity and noise/volume balancing — for Apple/Jamendo tracks. YouTube plays through YouTube's own player (which is most of what's in the catalog now), and browsers block outside code from reprocessing that audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">Flagship-style DSP chain — loudness normalization, bass, vocal clarity, air/treble and spatial width — for Apple/Jamendo tracks. YouTube plays through YouTube's own player, and browsers block outside code from reprocessing cross-origin audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
         </div>
         <label class="switch"><input type="checkbox" id="aiEnhanceToggle" ${appSettings.aiEnhance ? 'checked' : ''}><span class="slider"></span></label>
       </div>
-      <div class="add-hint">Applies to Apple/Jamendo preview playback — the only sources this app can pipe through the Web Audio API. YouTube and Spotify play through their own embedded players, so this toggle won't change those.</div>
+
+      <div class="fx-presets" id="fxPresets">
+        ${['flagship','bass','vocal','spatial','flat'].map(p => `
+          <button class="fx-preset-btn ${fx.preset === p ? 'active' : ''}" data-preset="${p}">${
+            ({ flagship: 'Flagship', bass: 'Bass Boost', vocal: 'Vocal Clarity', spatial: 'Spatial Sound', flat: 'Flat / Off' })[p]
+          }</button>
+        `).join('')}
+      </div>
+
+      ${fxSliderRow('bass', 'Bass', -6, 12, fx.bass, 'dB')}
+      ${fxSliderRow('treble', 'Treble / Air', -6, 12, fx.treble, 'dB')}
+      ${fxSliderRow('vocal', 'Vocal Clarity', -6, 12, fx.vocal, 'dB')}
+      ${fxSliderRow('loudness', 'Loudness Normalize', 1, 6, fx.loudness, 'x')}
+      ${fxSliderRow('spatial', 'Spatial / Surround Width', 0, 200, fx.spatial, '%')}
+
+      <div class="add-hint">Presets set all sliders at once — tweak any slider afterward to go fully custom. "Spatial / Surround Width" is a mid-side stereo widener (like the virtual-surround mode in phone audio-enhancer apps) — not licensed Dolby Atmos, just our own equivalent effect. Applies to Apple/Jamendo preview playback only; YouTube and Spotify play through their own embedded players.</div>
     `;
     document.getElementById('aiEnhanceToggle').onchange = (e) => {
       appSettings.aiEnhance = e.target.checked;
       saveSettings(appSettings);
       ensureAudioGraph();
       applyEnhanceState();
+      renderSettingsTab('audio');
     };
+    document.querySelectorAll('#fxPresets .fx-preset-btn').forEach(btn => {
+      btn.onclick = () => {
+        applyFxPreset(btn.dataset.preset);
+        renderSettingsTab('audio');
+      };
+    });
+    ['bass','treble','vocal','loudness','spatial'].forEach(key => {
+      const input = document.getElementById('fx_' + key);
+      if (!input) return;
+      input.oninput = (e) => {
+        appSettings.audioFX[key] = parseFloat(e.target.value);
+        appSettings.audioFX.preset = 'custom';
+        document.getElementById('fxval_' + key).textContent = fxDisplayValue(key, appSettings.audioFX[key]);
+        document.querySelectorAll('#fxPresets .fx-preset-btn').forEach(b => b.classList.remove('active'));
+        saveSettings(appSettings);
+        applyEnhanceState();
+      };
+    });
   } else if (tab === 'friends') {
     renderFriendsTab();
   } else if (tab === 'account') {
@@ -825,13 +898,34 @@ function renderSettingsTab(tab) {
    reached by the Web Audio API, so those keep their native embed quality
    regardless of this setting. */
 function settingsKey() { return 'streamplay_settings_' + (currentUser ? currentUser.id : 'anon'); }
+
+// Preset -> slider values. "flagship" is the previous always-on tuning,
+// kept as the default so existing behavior doesn't change for anyone
+// who hasn't touched these controls yet.
+const FX_PRESETS = {
+  flagship: { bass: 4,   treble: 5.5, vocal: 3,   loudness: 3, spatial: 100 },
+  bass:     { bass: 9,   treble: 2,   vocal: 1,   loudness: 3.5, spatial: 100 },
+  vocal:    { bass: 1.5, treble: 4,   vocal: 8,   loudness: 3, spatial: 90 },
+  spatial:  { bass: 3,   treble: 5,   vocal: 2,   loudness: 2.5, spatial: 170 },
+  flat:     { bass: 0,   treble: 0,   vocal: 0,   loudness: 1, spatial: 100 }
+};
 function loadSettings() {
   // AI enhancement is ON by default — no manual setup required. The
   // settings toggle exists only for people who want to turn it OFF.
-  try { return Object.assign({ aiEnhance: true }, JSON.parse(localStorage.getItem(settingsKey()))); }
-  catch (e) { return { aiEnhance: true }; }
+  const defaults = { aiEnhance: true, audioFX: Object.assign({ preset: 'flagship' }, FX_PRESETS.flagship) };
+  try {
+    const stored = JSON.parse(localStorage.getItem(settingsKey()));
+    return Object.assign({}, defaults, stored, { audioFX: Object.assign({}, defaults.audioFX, stored && stored.audioFX) });
+  } catch (e) { return defaults; }
 }
 function saveSettings(s) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
+function applyFxPreset(name) {
+  const preset = FX_PRESETS[name];
+  if (!preset) return;
+  appSettings.audioFX = Object.assign({ preset: name }, preset);
+  saveSettings(appSettings);
+  applyEnhanceState();
+}
 let appSettings = loadSettings();
 
 /* ---- AI Audio Enhance DSP chain ----
@@ -841,6 +935,8 @@ let appSettings = loadSettings();
    noise reduction / balance            -> high-shelf + gentle makeup gain
    Applied automatically; nothing for the user to configure. */
 let audioCtx = null, enhanceSource = null, enhanceComp = null, enhanceBass = null, enhancePresence = null, enhanceShelf = null, enhanceGain = null;
+// Spatial/surround widener nodes (mid-side stereo width control).
+let spatialSplitter = null, spatialMerger = null, spatialMidGain = null, spatialSideGainL = null, spatialSideGainR = null;
 function ensureAudioGraph() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
   try {
@@ -855,24 +951,65 @@ function ensureAudioGraph() {
     enhanceShelf = audioCtx.createBiquadFilter(); // air / de-noise balance
     enhanceShelf.type = 'highshelf'; enhanceShelf.frequency.value = 9000; enhanceShelf.gain.value = 0;
     enhanceGain = audioCtx.createGain(); enhanceGain.gain.value = 1; // volume balancing
-    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(audioCtx.destination);
+
+    // --- Spatial / surround widener ---
+    // Classic mid-side trick: split into L/R, build mid=(L+R)/2 and
+    // side=(L-R)/2, then recombine as outL = mid + side*width,
+    // outR = mid - side*width. width=1 (100%) is untouched stereo;
+    // >1 widens, <1 narrows toward mono. This is our own effect, not
+    // licensed Dolby tech, but gives the same kind of "wider" feel
+    // those phone audio-enhancer apps market as surround/3D mode.
+    spatialSplitter = audioCtx.createChannelSplitter(2);
+    spatialMerger = audioCtx.createChannelMerger(2);
+    const halfL = audioCtx.createGain(); halfL.gain.value = 0.5;
+    const halfR = audioCtx.createGain(); halfR.gain.value = 0.5;
+    spatialMidGain = audioCtx.createGain(); spatialMidGain.gain.value = 1;
+    spatialSplitter.connect(halfL, 0); spatialSplitter.connect(halfR, 1);
+    halfL.connect(spatialMidGain); halfR.connect(spatialMidGain);
+
+    const sideHalfL = audioCtx.createGain(); sideHalfL.gain.value = 0.5;
+    const sideHalfRneg = audioCtx.createGain(); sideHalfRneg.gain.value = -0.5;
+    spatialSplitter.connect(sideHalfL, 0); spatialSplitter.connect(sideHalfRneg, 1);
+    const sideSum = audioCtx.createGain(); sideSum.gain.value = 1;
+    sideHalfL.connect(sideSum); sideHalfRneg.connect(sideSum);
+    const sideInvert = audioCtx.createGain(); sideInvert.gain.value = -1;
+    sideSum.connect(sideInvert);
+
+    spatialSideGainL = audioCtx.createGain(); spatialSideGainL.gain.value = 1; // +side*width -> L
+    spatialSideGainR = audioCtx.createGain(); spatialSideGainR.gain.value = 1; // -side*width -> R
+    sideSum.connect(spatialSideGainL);
+    sideInvert.connect(spatialSideGainR);
+
+    spatialMidGain.connect(spatialMerger, 0, 0);
+    spatialSideGainL.connect(spatialMerger, 0, 0);
+    spatialMidGain.connect(spatialMerger, 0, 1);
+    spatialSideGainR.connect(spatialMerger, 0, 1);
+
+    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(spatialSplitter);
+    spatialMerger.connect(audioCtx.destination);
     applyEnhanceState();
   } catch (e) { console.warn('Web Audio graph unavailable:', e.message); }
 }
 function applyEnhanceState() {
   if (!enhanceShelf) { updateQualityBadge(); return; }
+  const fx = appSettings.audioFX;
   if (appSettings.aiEnhance) {
-    enhanceShelf.gain.value = 5.5;
-    enhanceBass.gain.value = 4;
-    enhancePresence.gain.value = 3;
-    enhanceComp.ratio.value = 3;
-    enhanceGain.gain.value = 1.08;
+    enhanceShelf.gain.value = fx.treble;
+    enhanceBass.gain.value = fx.bass;
+    enhancePresence.gain.value = fx.vocal;
+    enhanceComp.ratio.value = fx.loudness;
+    enhanceGain.gain.value = 1 + (fx.loudness - 1) * 0.03; // gentle makeup gain, scales with normalization amount
+    const width = fx.spatial / 100;
+    spatialSideGainL.gain.value = width;
+    spatialSideGainR.gain.value = width;
   } else {
     enhanceShelf.gain.value = 0;
     enhanceBass.gain.value = 0;
     enhancePresence.gain.value = 0;
     enhanceComp.ratio.value = 1;
     enhanceGain.gain.value = 1;
+    spatialSideGainL.gain.value = 1;
+    spatialSideGainR.gain.value = 1;
   }
   updateQualityBadge();
 }
@@ -883,7 +1020,8 @@ function updateQualityBadge() {
   badge.style.display = '';
   if (current.source === 'apple' || current.source === 'jamendo') {
     if (appSettings.aiEnhance) {
-      badge.textContent = 'AI ENHANCED · FLAC-LIKE';
+      const fx = appSettings.audioFX;
+      badge.textContent = fx.spatial > 110 ? 'AI ENHANCED · FLAC-LIKE · SPATIAL' : 'AI ENHANCED · FLAC-LIKE';
       badge.style.color = 'var(--accent)'; badge.style.borderColor = 'var(--accent)';
     } else {
       badge.textContent = 'STANDARD';
@@ -1491,6 +1629,49 @@ function loadTrendingCache() {
 function saveTrendingCache(results) {
   try { localStorage.setItem(trendingCacheKey(), JSON.stringify({ ts: Date.now(), results })); } catch (e) { /* ignore */ }
 }
+/* ---- Filtering out covers/karaoke/reactions/irrelevant uploads ----
+   Two passes:
+   1. Heuristic (instant, no network): keyword-based, catches the obvious
+      cases from the title/channel text alone.
+   2. AI second pass (best-effort): sends the survivors' title+channel to
+      the streamplay-ai edge function to judge official vs not. This is a
+      TEXT judgment only — there's no audio analysis/fingerprinting here,
+      just an LLM reading titles the same way heuristics do, more
+      flexibly. If the edge function is unavailable, we silently keep
+      whatever the heuristic pass already produced rather than blocking
+      the UI on it. */
+function isLikelyNotOriginal(title, channel) {
+  const t = (title || '').toLowerCase();
+  const c = (channel || '').toLowerCase();
+  const patterns = [
+    /\bcover(s|ed)?\b/, /\bkaraoke\b/, /\binstrumental\b/, /\breaction(s)?\b/,
+    /\btutorial\b/, /\bhow to (play|sing)\b/, /\btype beat\b/, /\bnightcore\b/,
+    /\bsped up\b/, /\bslowed( \+|,)? ?reverb\b/, /\b1 ?hour\b/, /\bloop(ed)?\b/,
+    /\bfan[- ]?made\b/, /\bunofficial\b/, /\bacoustic cover\b/, /\bmashup\b/,
+    /\b8d audio\b/, /\bringtone\b/, /\bbackwards\b/, /\bwhatsapp status\b/,
+    /\bfull album\b/, /\binterview\b/, /\bvlog\b/
+  ];
+  return patterns.some(p => p.test(t)) || /reacts?( to)?|reaction channel/.test(c);
+}
+async function refineWithAIClassify(list, onRefined) {
+  if (!list.length) return;
+  try {
+    const candidates = list.map(r => ({ title: r.title, channel: r.channel }));
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { action: 'classify', candidates }
+    });
+    if (error || !data || !Array.isArray(data.results) || !data.results.length) return;
+    const keep = new Set(data.results.filter(x => x.isOriginal !== false).map(x => x.index));
+    const refined = list.filter((_, i) => keep.has(i));
+    // Only apply if the AI pass actually narrowed things down — an empty
+    // or malformed response shouldn't wipe out results the heuristic
+    // pass already approved.
+    if (refined.length && refined.length < list.length) onRefined(refined);
+  } catch (e) {
+    console.warn('[AI classify] skipped (falling back to heuristic filtering only):', e.message);
+  }
+}
+
 async function fetchYoutubeTrending() {
   if (trendingResults) return trendingResults;
   const cached = loadTrendingCache();
@@ -1575,7 +1756,11 @@ function renderHome() {
       grid.innerHTML = `<p class="empty-state">Couldn't load trending right now — check your YouTube API key/quota.</p>`;
       return;
     }
-    renderYoutubeResults(results, statusEl, grid);
+    const heuristicPass = results.filter(r => !isLikelyNotOriginal(r.title, r.channel));
+    renderYoutubeResults(heuristicPass, statusEl, grid);
+    refineWithAIClassify(heuristicPass, (refined) => {
+      if (currentView === 'home' && !searchInput.value.trim()) renderYoutubeResults(refined, statusEl, grid);
+    });
   });
 }
 
@@ -1599,7 +1784,7 @@ async function fetchAIRecommendations() {
 
   try {
     const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
-      body: { tracks: payload }
+      body: { action: 'recommend', tracks: payload }
     });
     if (error) throw error;
     const recs = (data && data.recommendations) || [];
@@ -1644,7 +1829,20 @@ async function fetchAIRecommendations() {
     });
   } catch (err) {
     statusEl.className = 'add-status error';
-    statusEl.textContent = 'Could not reach Streamplay AI. Make sure the Edge Function is deployed. (' + (err.message || err) + ')';
+    // Distinguish "function doesn't exist" from "function exists but
+    // threw" — they need different fixes, and lumping them together
+    // just tells the person to redeploy something that may already be
+    // deployed and simply missing its API-key secret.
+    const status = err && err.context && err.context.status;
+    if (status === 404) {
+      statusEl.textContent = 'Streamplay AI isn\'t deployed yet. Run: supabase functions deploy streamplay-ai (see streamplay-ai/index.ts).';
+    } else if (status === 401 || status === 403) {
+      statusEl.textContent = 'Streamplay AI rejected the request (unauthorized). Check you\'re logged in and that the function\'s JWT verification settings match your Supabase project.';
+    } else if (status >= 500 || !status) {
+      statusEl.textContent = 'Streamplay AI is deployed but errored server-side — most likely a missing API key secret. Run: supabase secrets set ANTHROPIC_API_KEY=sk-ant-... for the project, then try again. (' + (err.message || err) + ')';
+    } else {
+      statusEl.textContent = 'Could not reach Streamplay AI. (' + (err.message || err) + ')';
+    }
   }
 }
 
@@ -1866,12 +2064,17 @@ async function runYoutubeSearch(q) {
       channel: r.snippet.channelTitle,
       thumbnail: r.snippet.thumbnails.medium.url,
       duration: durationById[r.id.videoId] || 0
-    }));
+    })).filter(r => !isLikelyNotOriginal(r.title, r.channel));
 
     ytSearchCache.set(cacheKey, results);
     statusEl.className = 'add-status';
     console.log('[YT DEBUG] Calling renderYoutubeResults() with', results.length, 'processed result(s).');
     renderYoutubeResults(results, statusEl, gridEl);
+    refineWithAIClassify(results, (refined) => {
+      if (myToken !== ytSearchToken) return;
+      ytSearchCache.set(cacheKey, refined);
+      renderYoutubeResults(refined, statusEl, gridEl);
+    });
   } catch (err) {
     if (myToken !== ytSearchToken) return;
     console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
@@ -2182,6 +2385,25 @@ async function fetchLyrics(track) {
   return null;
 }
 
+/* Fallback when lyrics.ovh has nothing: ask the streamplay-ai edge
+   function to check Genius for a confirmed match. Genius's API doesn't
+   return lyrics text (by their own design, for licensing reasons), and
+   this app doesn't scrape or reproduce lyrics from anywhere else either
+   — so this only returns metadata + a link to view the real lyrics on
+   Genius's own page. */
+async function fetchGeniusMatch(artist, title) {
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { action: 'lyrics-lookup', artist, title }
+    });
+    if (error || !data) return null;
+    return data.match || null;
+  } catch (e) {
+    console.warn('[Genius lookup] skipped:', e.message);
+    return null;
+  }
+}
+
 async function refreshLyricsPanel() {
   const titleEl = document.getElementById('lyricsPanelTitle');
   const subEl = document.getElementById('lyricsPanelSub');
@@ -2199,9 +2421,28 @@ async function refreshLyricsPanel() {
   const myToken = ++lyricsRequestToken;
   const lyrics = await fetchLyrics(current);
   if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
-  bodyEl.innerHTML = lyrics
-    ? escapeHtml(lyrics).replace(/\n/g, '<br>')
-    : `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics database has on file.</p>`;
+  if (lyrics) {
+    bodyEl.innerHTML = escapeHtml(lyrics).replace(/\n/g, '<br>');
+    return;
+  }
+  // lyrics.ovh came up empty — try Genius for a confirmed match card.
+  const geniusMatch = await fetchGeniusMatch(current.artist, current.name);
+  if (myToken !== lyricsRequestToken) return;
+  if (geniusMatch && geniusMatch.url) {
+    bodyEl.innerHTML = `
+      <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+        ${geniusMatch.thumbnail ? `<img src="${geniusMatch.thumbnail}" style="width:52px; height:52px; border-radius:6px; object-fit:cover;">` : ''}
+        <div>
+          <p style="margin:0; font-weight:600; font-size:13px;">${escapeHtml(geniusMatch.title || current.name)}</p>
+          <p style="margin:0; color:var(--text-dim); font-size:12px;">${escapeHtml(geniusMatch.artist || current.artist)}</p>
+        </div>
+      </div>
+      <p class="empty-state" style="margin:0 0 10px;">Confirmed match on Genius — full lyrics live on their page (we don't reproduce lyrics text directly here).</p>
+      <a href="${geniusMatch.url}" target="_blank" rel="noopener" class="add-btn" style="display:inline-block; text-decoration:none;">View lyrics on Genius &rarr;</a>
+    `;
+    return;
+  }
+  bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>`;
 }
 
 document.getElementById('lyricsBtn').onclick = () => {
