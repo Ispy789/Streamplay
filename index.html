@@ -341,7 +341,7 @@
   .switch input:checked + .slider:before { transform: translateX(18px); background: #1a0f1c; }
 
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
-  .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
+  .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 
   .lyrics-toggle-btn {
     background: var(--bg-panel);
@@ -352,6 +352,7 @@
     border-radius: 14px;
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
   .lyrics-toggle-btn:hover { color: var(--text); border-color: var(--accent-dim); }
@@ -602,6 +603,18 @@ function formatTime(s) {
 }
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* The YouTube Data API frequently returns snippet.title / channelTitle
+   already HTML-entity-encoded (e.g. "she&#39;s green"). Left as-is, our
+   own escapeHtml() would double-encode it into literally-visible
+   "&#39;" text. Decoding once here (via a detached DOM node, not
+   innerHTML on anything live) fixes that at the source. */
+const _entityDecoder = document.createElement('textarea');
+function decodeHtmlEntities(str) {
+  if (!str) return str;
+  _entityDecoder.innerHTML = str;
+  return _entityDecoder.value;
 }
 
 /* ============================================================
@@ -1022,7 +1035,8 @@ function updateQualityBadge() {
     // YouTube iframe audio, so "AI Enhance" genuinely can't touch this —
     // showing an ENHANCED badge here would be lying. We do still ask
     // YouTube for its best available stream quality.
-    badge.textContent = 'YOUTUBE · BEST AVAILABLE QUALITY';
+    badge.textContent = 'YOUTUBE HD';
+    badge.title = "Played via YouTube's own player at its best available quality — AI Enhance can't reprocess this audio (cross-origin restriction).";
     badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
   } else {
     badge.style.display = 'none';
@@ -1672,8 +1686,8 @@ async function fetchYoutubeTrending() {
       const data = await res.json();
       const results = (data.items || []).map(v => ({
         videoId: v.id,
-        title: v.snippet.title,
-        channel: v.snippet.channelTitle,
+        title: decodeHtmlEntities(v.snippet.title),
+        channel: decodeHtmlEntities(v.snippet.channelTitle),
         thumbnail: ((v.snippet.thumbnails || {}).medium || (v.snippet.thumbnails || {}).default || {}).url,
         duration: parseYoutubeDuration(v.contentDetails && v.contentDetails.duration)
       }));
@@ -2070,8 +2084,8 @@ async function runYoutubeSearch(q) {
 
     const results = items.map(r => ({
       videoId: r.id.videoId,
-      title: r.snippet.title,
-      channel: r.snippet.channelTitle,
+      title: decodeHtmlEntities(r.snippet.title),
+      channel: decodeHtmlEntities(r.snippet.channelTitle),
       thumbnail: r.snippet.thumbnails.medium.url,
       duration: durationById[r.id.videoId] || 0
     }));
@@ -2492,7 +2506,7 @@ async function youtubeQuickSearch(query, maxResults) {
     const data = await res.json();
     if (!res.ok) return [];
     return (data.items || []).map(r => ({
-      videoId: r.id.videoId, title: r.snippet.title, channel: r.snippet.channelTitle,
+      videoId: r.id.videoId, title: decodeHtmlEntities(r.snippet.title), channel: decodeHtmlEntities(r.snippet.channelTitle),
       thumbnail: (r.snippet.thumbnails.medium || r.snippet.thumbnails.default).url, duration: 0
     }));
   } catch (e) { console.warn('[YT quick search] failed:', e.message); return []; }
