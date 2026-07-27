@@ -3,68 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <title>Streamplay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --bg: #241626;
-    --bg-panel: #2f1c33;
-    --bg-card: #3a2440;
-    --bg-card-hover: #482c50;
-    --accent: #e0a458;
-    --accent-dim: #c98a3f;
-    --text: #f6ede0;
-    --text-dim: #b8a7bd;
-    --border: #4a3350;
+    --bg: #070809;
+    --bg2: #101214;
+    --panel: rgba(18,20,24,.72);
+    --panel-solid: #111317;
+    --card: rgba(255,255,255,.045);
+    --card-hover: rgba(255,255,255,.08);
+    --border: rgba(255,255,255,.08);
+    --gold: #E9C46A;
+    --gold2: #FFD78C;
+    --text: #FAFAFA;
+    --text2: #A8ADB6;
+    --shadow: 0 12px 40px rgba(0,0,0,.45);
+    --blur: 20px;
+    --bg-panel: var(--panel-solid);
+    --bg-card: var(--card);
+    --bg-card-hover: var(--card-hover);
+    --accent: var(--gold);
+    --accent-dim: var(--gold2);
+    --text-dim: var(--text2);
     --danger: #d9705f;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; scroll-behavior: smooth; }
   body {
     margin: 0;
-    font-family: 'Segoe UI', Helvetica, Arial, sans-serif;
-    background: var(--bg);
+    font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background:
+      radial-gradient(circle at top left, #272727 0%, transparent 35%),
+      radial-gradient(circle at bottom right, #1f1610 0%, transparent 40%),
+      linear-gradient(160deg, #050505, #0e1012);
     color: var(--text);
     height: 100vh;
     overflow: hidden;
   }
+  .bg-orbs {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.35;
+  }
+  .orb-1 {
+    width: 420px; height: 420px;
+    top: -80px; left: -60px;
+    background: radial-gradient(circle, rgba(233,196,106,.35), transparent 70%);
+  }
+  .orb-2 {
+    width: 360px; height: 360px;
+    bottom: 60px; right: -40px;
+    background: radial-gradient(circle, rgba(255,215,140,.2), transparent 70%);
+  }
   .app {
     display: grid;
-    grid-template-columns: 220px 1fr;
-    grid-template-rows: 1fr 88px;
+    grid-template-columns: 248px 1fr;
+    grid-template-rows: 1fr auto;
     height: 100vh;
+    position: relative;
+    z-index: 1;
   }
   .sidebar {
-    background: #1a0f1c;
-    padding: 24px 16px;
+    margin: 18px 0 18px 18px;
+    border-radius: 24px;
+    backdrop-filter: blur(30px);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 28px 22px;
     display: flex;
     flex-direction: column;
     gap: 24px;
-    border-right: 1px solid var(--border);
   }
   .logo {
-    font-family: Georgia, serif;
-    font-size: 22px;
-    letter-spacing: 0.5px;
-    color: var(--accent);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: white;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
   .logo .disc {
-    width: 20px; height: 20px;
+    width: 26px; height: 26px;
     border-radius: 50%;
-    background: radial-gradient(circle at center, var(--bg-panel) 0 3px, var(--accent) 4px 100%);
+    background: linear-gradient(135deg, #FFD77A, #E5B95C);
+    box-shadow: 0 0 25px rgba(233,196,106,.45);
     display: inline-block;
+    flex-shrink: 0;
   }
-  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
   .nav a {
-    color: var(--text-dim);
+    color: var(--text2);
     text-decoration: none;
     font-size: 14px;
-    padding: 8px 10px;
-    border-radius: 6px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    padding: 14px 18px;
+    border-radius: 16px;
     cursor: pointer;
+    transition: 0.25s;
   }
-  .nav a.active, .nav a:hover { background: var(--bg-panel); color: var(--text); }
+  .nav a:hover {
+    background: rgba(255,255,255,.05);
+    transform: translateX(5px);
+    color: white;
+  }
+  .nav a.active {
+    background: linear-gradient(90deg, rgba(233,196,106,.18), transparent);
+    color: var(--gold);
+  }
   .playlists { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
   .playlists .heading { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 8px 10px 4px; }
   .playlist-item {
@@ -94,56 +152,95 @@
   .logout-link { font-size: 11px; color: var(--text-dim); cursor: pointer; }
   .logout-link:hover { color: var(--accent); text-decoration: underline; }
 
-  .main { overflow-y: auto; padding: 24px 32px; scroll-behavior: smooth; }
+  .main {
+    overflow-y: auto;
+    padding: 24px 32px 32px;
+    margin: 18px 18px 0 0;
+    border-radius: 24px;
+    backdrop-filter: blur(20px);
+    background: rgba(255,255,255,.02);
+    border: 1px solid rgba(255,255,255,.04);
+  }
   #mainContent { animation: fadeIn 0.18s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 16px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; gap: 16px; }
   .search {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 8px 16px;
-    width: 320px;
+    height: 56px;
+    padding: 0 22px;
+    border-radius: 18px;
+    background: rgba(255,255,255,.04);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,.08);
     color: var(--text);
-    font-size: 13px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    font-size: 15px;
+    transition: 0.3s;
   }
-  .search:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 3px rgba(224,164,88,0.15); }
-  .search::placeholder { color: var(--text-dim); }
+  .search:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 4px rgba(233,196,106,.12);
+  }
+  .search::placeholder { color: var(--text2); }
 
   .add-btn {
-    background: var(--accent);
-    color: #1a0f1c;
+    background: linear-gradient(135deg, #FFD77A, #E9C46A);
+    color: black;
     border: none;
-    border-radius: 20px;
-    padding: 9px 18px;
+    border-radius: 50px;
+    padding: 14px 24px;
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 10px 30px rgba(233,196,106,.35);
+    transition: 0.3s;
   }
-  .add-btn:hover { background: var(--accent-dim); }
-  .add-btn:active { transform: scale(0.97); }
+  .add-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(233,196,106,.45);
+  }
+  .add-btn:active { transform: translateY(-1px) scale(0.98); }
 
   h2.section-title { font-size: 18px; margin: 28px 0 12px; font-weight: 600; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
   .card {
-    background: var(--bg-card);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 24px;
+    background: var(--card);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,.08);
+    padding: 18px;
     cursor: pointer;
-    transition: background 0.15s, transform 0.15s;
+    transition: 0.35s;
+    overflow: hidden;
+    position: relative;
   }
-  .card:hover { background: var(--bg-card-hover); transform: translateY(-2px); }
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0;
+    transition: 0.3s;
+  }
+  .card:hover {
+    transform: translateY(-8px) scale(1.02);
+    background: var(--card-hover);
+    box-shadow: 0 18px 45px rgba(0,0,0,.45);
+  }
+  .card:hover::before { opacity: 1; }
   .art {
     width: 100%; aspect-ratio: 1;
-    border-radius: 6px;
-    margin-bottom: 10px;
+    border-radius: 18px;
+    margin-bottom: 12px;
     display: flex; align-items: center; justify-content: center;
     font-size: 28px;
     color: rgba(255,255,255,0.85);
     background-size: cover; background-position: center;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(0,0,0,.35);
+    transition: 0.35s;
   }
+  .card:hover .art { transform: scale(1.05); }
   .card-title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
   .card-sub { font-size: 12px; color: var(--text-dim); margin: 0; }
 
@@ -152,14 +249,14 @@
     display: grid;
     grid-template-columns: 28px 1fr 110px 60px auto;
     align-items: center;
-    padding: 8px 10px;
-    border-radius: 6px;
+    padding: 14px 18px;
+    border-radius: 16px;
     cursor: pointer;
     font-size: 13px;
     gap: 12px;
-    transition: background 0.12s;
+    transition: 0.25s;
   }
-  .track-row:hover { background: var(--bg-panel); }
+  .track-row:hover { background: rgba(255,255,255,.05); transform: scale(1.01); }
   .track-row.playing { color: var(--accent); }
   .track-num { color: var(--text-dim); font-size: 12px; }
   .track-name { font-weight: 500; }
@@ -232,17 +329,30 @@
 
   .player {
     grid-column: 1 / -1;
-    background: #150c17;
-    border-top: 1px solid var(--border);
+    margin: 0 18px 18px 18px;
+    border-radius: 24px;
+    backdrop-filter: blur(30px);
+    background: rgba(14,15,18,.82);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: var(--shadow);
     display: grid;
-    grid-template-columns: 220px 1fr 220px;
+    grid-template-columns: 280px 1fr 220px;
     align-items: center;
-    padding: 0 16px;
+    padding: 14px 24px;
     gap: 16px;
     position: relative;
+    min-height: 96px;
   }
-  .now-playing { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .now-art { width: 48px; height: 48px; border-radius: 6px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; font-size:18px; background-size: cover; background-position: center; }
+  .now-playing { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .now-art {
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    background-size: cover; background-position: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
   .now-info { min-width: 0; }
   .now-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .now-artist { font-size: 12px; color: var(--text-dim); }
@@ -253,17 +363,27 @@
     cursor: pointer; font-size: 16px; padding: 4px;
   }
   .play-btn {
-    background: var(--text) !important; color: #150c17 !important;
-    border-radius: 50%; width: 32px; height: 32px;
+    width: 58px !important; height: 58px !important;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FFD77A, #E9C46A) !important;
+    color: black !important;
+    font-size: 20px;
+    box-shadow: 0 12px 35px rgba(233,196,106,.45);
+    transition: 0.25s;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
   }
-  .progress-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-  .time { font-size: 11px; color: var(--text-dim); width: 32px; }
+  .play-btn:hover { transform: scale(1.1); }
+  .progress-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .time { font-size: 11px; color: var(--text2); width: 36px; font-variant-numeric: tabular-nums; }
   .time.right { text-align: right; }
-  .bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; position: relative; }
-  .bar-fill { height: 100%; background: var(--text); border-radius: 2px; width: 0%; transition: width 0.9s linear, background 0.15s; }
-  .bar:hover .bar-fill { background: var(--accent); }
+  .bar { flex: 1; height: 7px; background: #2a2d31; border-radius: 50px; cursor: pointer; position: relative; }
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #FFD77A, #E9C46A);
+    border-radius: 50px;
+    width: 0%;
+    transition: width 0.9s linear;
+  }
   .volume { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
   .volume-bar { width: 90px; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; }
   .volume-fill { height: 100%; width: 70%; background: var(--text); border-radius: 2px; }
@@ -283,14 +403,24 @@
   #spotifyEmbedFrame { width: 100%; height: 152px; border: none; display: block; }
 
   ::-webkit-scrollbar { width: 8px; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 20px; }
 
   #authOverlay {
-    position: fixed; inset: 0; background: rgba(20,10,22,0.92);
+    position: fixed; inset: 0;
+    background: rgba(5,6,8,0.92);
+    backdrop-filter: blur(12px);
     display: flex; align-items: center; justify-content: center;
     z-index: 100;
   }
-  .auth-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 32px; width: 340px; }
+  .auth-card {
+    background: rgba(18,20,24,.92);
+    backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 24px;
+    padding: 32px;
+    width: 340px;
+    box-shadow: var(--shadow);
+  }
   .auth-card .logo { justify-content: center; margin-bottom: 20px; font-size: 24px; }
   .auth-card h3 { margin: 0 0 4px; font-size: 15px; text-align: center; font-weight: 600; }
   .auth-card p.sub { text-align: center; color: var(--text-dim); font-size: 12px; margin: 0 0 20px; }
@@ -344,45 +474,118 @@
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 
   .lyrics-toggle-btn {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: var(--text2);
     font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 14px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 20px;
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    transition: 0.25s;
   }
-  .lyrics-toggle-btn:hover { color: var(--text); border-color: var(--accent-dim); }
-  .lyrics-toggle-btn.active { background: var(--accent); color: #1a0f1c; border-color: var(--accent); }
+  .lyrics-toggle-btn:hover { color: white; border-color: rgba(233,196,106,.4); background: rgba(255,255,255,.08); }
+  .lyrics-toggle-btn.active {
+    background: linear-gradient(135deg, rgba(255,215,122,.25), rgba(233,196,106,.15));
+    color: var(--gold);
+    border-color: rgba(233,196,106,.45);
+  }
+  @media (max-width: 900px) {
+    .lyrics-panel { inset: 18px 18px 130px 18px; }
+    .lyrics-line { font-size: 22px; }
+    .lyrics-line.past, .lyrics-line.upcoming { font-size: 18px; }
+  }
 
   .lyrics-panel {
     position: fixed;
-    right: 24px;
-    bottom: 104px;
-    width: 360px;
-    max-height: 55vh;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    inset: 18px 18px 130px 270px;
+    background: rgba(10,11,14,.88);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 28px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
     display: flex;
     flex-direction: column;
     opacity: 0;
-    transform: translateY(12px);
+    transform: scale(0.98);
     pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease;
+    transition: opacity 0.28s ease, transform 0.28s ease;
     z-index: 90;
+    overflow: hidden;
   }
-  .lyrics-panel.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
-  .lyrics-panel-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 10px; }
-  .lyrics-panel-title { font-size: 14px; font-weight: 700; }
-  .lyrics-panel-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-  .lyrics-panel-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
-  .lyrics-panel-close:hover { color: var(--text); }
-  .lyrics-panel-body { padding: 14px 16px; overflow-y: auto; white-space: pre-line; font-size: 13px; line-height: 1.8; color: var(--text); }
+  .lyrics-panel.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+  .lyrics-panel-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .lyrics-panel-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .lyrics-panel-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
+  .lyrics-panel-close {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+    color: var(--text2);
+    font-size: 18px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    line-height: 1;
+    transition: 0.2s;
+  }
+  .lyrics-panel-close:hover { color: white; background: rgba(255,255,255,.1); }
+  .lyrics-panel-body {
+    flex: 1;
+    padding: 32px 28px 48px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+  }
+  .lyrics-sync-view {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 0 80px;
+  }
+  .lyrics-line {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
+    color: rgba(255,255,255,.28);
+    transition: color 0.35s ease, transform 0.35s ease, opacity 0.35s ease;
+    cursor: pointer;
+    transform-origin: left center;
+  }
+  .lyrics-line.past { color: rgba(255,255,255,.18); font-weight: 600; font-size: 24px; }
+  .lyrics-line.active {
+    color: white;
+    transform: scale(1.04);
+    text-shadow: 0 0 40px rgba(233,196,106,.25);
+  }
+  .lyrics-line.upcoming { color: rgba(255,255,255,.32); font-weight: 600; font-size: 26px; }
+  .lyrics-plain-text { font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-line; }
+  .lyrics-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: var(--gold);
+    border: 1px solid rgba(233,196,106,.35);
+    border-radius: 20px;
+    padding: 4px 10px;
+    margin-bottom: 20px;
+  }
   .lyrics-toolbar {
     display: none;
     align-items: center;
@@ -464,6 +667,11 @@
 </style>
 </head>
 <body>
+
+<div class="bg-orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+</div>
 
 <div id="authOverlay">
   <div class="auth-card">
@@ -2412,8 +2620,14 @@ const appleAudio = document.getElementById('applePreviewAudio');
    app is ever shipped publicly at scale, swap in a licensed lyrics
    provider (e.g. Musixmatch's official API) instead. */
 const lyricsCache = new Map(); // "artist|||title" -> string | null
+const syncedLyricsCache = new Map(); // "artist|||title" -> { synced, plain } | null
 let lyricsPanelOpen = false;
 let lyricsRequestToken = 0;
+let syncedLyrics = [];       // [{ time, text }]
+let lyricsSyncEnabled = false;
+let lyricsSyncSource = 'none'; // 'lrc' | 'estimated' | 'none'
+let spotifyPosition = 0;
+let lyricsSyncRaf = null;
 
 /* ---- AI translate + AI-generated-lyrics state ----
    currentLyricsRaw holds whatever text is currently shown in the panel
@@ -2422,6 +2636,8 @@ let lyricsRequestToken = 0;
    track+language so flipping back and forth doesn't re-hit the model. */
 let currentLyricsRaw = null;      // the text currently eligible for translation
 let currentLyricsIsAI = false;    // was currentLyricsRaw itself AI-generated?
+let currentLyricsSyncedLines = null;
+let currentLyricsSyncSource = 'none';
 let translationCache = new Map(); // "lang" -> translated string, for the current track
 let showingTranslation = false;
 
@@ -2471,6 +2687,153 @@ async function fetchLyricsOnce(artist, title) {
     console.warn('[Lyrics] fetch failed:', e.message);
     return null;
   }
+}
+
+function parseLRC(lrcText) {
+  if (!lrcText) return [];
+  const lines = [];
+  for (const raw of lrcText.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const matches = [...line.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    if (!matches.length) continue;
+    const text = line.replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').trim();
+    if (!text) continue;
+    for (const m of matches) {
+      lines.push({ time: parseInt(m[1], 10) * 60 + parseFloat(m[2]), text });
+    }
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+function estimateSyncedLines(plainText, durationSec) {
+  const lines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const dur = durationSec && durationSec > 0 ? durationSec : lines.length * 3.5;
+  const step = dur / lines.length;
+  return lines.map((text, i) => ({ time: i * step, text }));
+}
+
+async function fetchSyncedLyricsOnce(artist, title) {
+  const key = (artist + '|||' + title).toLowerCase();
+  if (syncedLyricsCache.has(key)) return syncedLyricsCache.get(key);
+  try {
+    const params = new URLSearchParams({ track_name: title, artist_name: artist });
+    const res = await fetch(`https://lrclib.net/api/get?${params}`);
+    if (!res.ok) { syncedLyricsCache.set(key, null); return null; }
+    const data = await res.json();
+    const synced = data.syncedLyrics ? parseLRC(data.syncedLyrics) : null;
+    const plain = data.plainLyrics ? data.plainLyrics.trim() : null;
+    const result = (synced && synced.length) || plain ? { synced, plain } : null;
+    syncedLyricsCache.set(key, result);
+    return result;
+  } catch (e) {
+    console.warn('[Lyrics] LRCLIB fetch failed:', e.message);
+    syncedLyricsCache.set(key, null);
+    return null;
+  }
+}
+
+async function fetchSyncedLyrics(track) {
+  for (const c of lyricsCandidates(track)) {
+    if (!c.artist || !c.title) continue;
+    const result = await fetchSyncedLyricsOnce(c.artist, c.title);
+    if (result) return result;
+  }
+  return null;
+}
+
+function getTrackDurationSec() {
+  if (!current) return 0;
+  if (current.source === 'youtube' && ytPlayer && ytPlayer.getDuration) {
+    const d = ytPlayer.getDuration();
+    if (d) return d;
+  }
+  if ((current.source === 'apple' || current.source === 'jamendo') && appleAudio.duration) {
+    return appleAudio.duration;
+  }
+  if (current.source === 'local') return current.duration || 0;
+  if (current.source === 'spotify' && spotifyController) {
+    return (current.duration || 0);
+  }
+  return current.duration || 0;
+}
+
+function getCurrentPlaybackTime() {
+  if (!current) return 0;
+  if (current.source === 'youtube' && ytPlayer && ytPlayer.getCurrentTime) {
+    return ytPlayer.getCurrentTime() || 0;
+  }
+  if (current.source === 'apple' || current.source === 'jamendo') {
+    return appleAudio.currentTime || 0;
+  }
+  if (current.source === 'local') return mockElapsed;
+  if (current.source === 'spotify') return spotifyPosition;
+  return mockElapsed;
+}
+
+function stopLyricsSyncLoop() {
+  if (lyricsSyncRaf) cancelAnimationFrame(lyricsSyncRaf);
+  lyricsSyncRaf = null;
+}
+
+function startLyricsSyncLoop() {
+  stopLyricsSyncLoop();
+  if (!lyricsPanelOpen || !lyricsSyncEnabled || !syncedLyrics.length) return;
+  const tick = () => {
+    updateLyricsSync();
+    if (lyricsPanelOpen && lyricsSyncEnabled) lyricsSyncRaf = requestAnimationFrame(tick);
+  };
+  lyricsSyncRaf = requestAnimationFrame(tick);
+}
+
+function updateLyricsSync() {
+  if (!lyricsSyncEnabled || !syncedLyrics.length) return;
+  const t = getCurrentPlaybackTime();
+  let activeIdx = 0;
+  for (let i = 0; i < syncedLyrics.length; i++) {
+    if (syncedLyrics[i].time <= t + 0.05) activeIdx = i;
+    else break;
+  }
+  const lineEls = document.querySelectorAll('.lyrics-line');
+  if (!lineEls.length) return;
+  lineEls.forEach((el, i) => {
+    el.classList.toggle('active', i === activeIdx);
+    el.classList.toggle('past', i < activeIdx);
+    el.classList.toggle('upcoming', i > activeIdx);
+  });
+  const activeEl = lineEls[activeIdx];
+  if (activeEl && playing) {
+    activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
+function refreshEstimatedLyricsSync() {
+  if (!currentLyricsRaw || lyricsSyncSource !== 'estimated' || !lyricsPanelOpen) return;
+  const dur = getTrackDurationSec();
+  if (!dur || dur < 10) return;
+  const estimated = estimateSyncedLines(currentLyricsRaw, dur);
+  renderLyricsText(currentLyricsRaw, {
+    syncedLines: estimated,
+    syncSource: 'estimated',
+    aiGenerated: currentLyricsIsAI
+  });
+}
+function seekToLyricLine(index) {
+  const line = syncedLyrics[index];
+  if (!line || !current) return;
+  const t = line.time;
+  if (current.source === 'youtube' && ytPlayer && ytPlayer.seekTo) {
+    ytPlayer.seekTo(t, true);
+  } else if (current.source === 'apple' || current.source === 'jamendo') {
+    appleAudio.currentTime = t;
+  } else if (current.source === 'local') {
+    mockElapsed = Math.floor(t);
+    curTimeEl.textContent = formatTime(mockElapsed);
+    const dur = current.duration || 1;
+    progressFill.style.width = ((mockElapsed / dur) * 100) + '%';
+  }
+  updateLyricsSync();
 }
 
 /* Tries progressively looser candidates (cleaned title -> parsed
@@ -2533,14 +2896,42 @@ async function generateAILyrics(track) {
   }
 }
 
-/* Renders whichever lyrics text (real or AI) is currently active, tags
-   it with a badge when it's AI-generated, and reveals the translate
-   toolbar so the person can flip it into another language. */
+/* Renders synced or plain lyrics with Spotify-style line highlighting. */
 function renderLyricsText(text, opts) {
   opts = opts || {};
   const bodyEl = document.getElementById('lyricsPanelBody');
-  const badge = opts.aiGenerated ? `<span class="lyrics-ai-badge">&#10024; AI-generated</span><div class="lyrics-ai-disclaimer">This isn't an official lyrics source — it's a best-effort AI approximation and may not match the real song exactly.</div>` : '';
-  bodyEl.innerHTML = badge + escapeHtml(text).replace(/\n/g, '<br>');
+  const badge = opts.aiGenerated
+    ? `<span class="lyrics-ai-badge">&#10024; AI-generated</span><div class="lyrics-ai-disclaimer">This isn't an official lyrics source — it's a best-effort AI approximation and may not match the real song exactly.</div>`
+    : '';
+
+  if (opts.syncedLines && opts.syncedLines.length) {
+    syncedLyrics = opts.syncedLines;
+    currentLyricsSyncedLines = opts.syncedLines;
+    currentLyricsSyncSource = opts.syncSource || 'estimated';
+    lyricsSyncEnabled = true;
+    lyricsSyncSource = currentLyricsSyncSource;
+    const syncTag = opts.syncSource === 'lrc'
+      ? `<span class="lyrics-sync-badge">&#9679; Synced lyrics</span>`
+      : `<span class="lyrics-sync-badge">&#9679; Auto-synced</span>`;
+    bodyEl.innerHTML = badge + syncTag + '<div class="lyrics-sync-view">' +
+      syncedLyrics.map((l, i) =>
+        `<div class="lyrics-line upcoming" data-index="${i}" data-time="${l.time}">${escapeHtml(l.text)}</div>`
+      ).join('') + '</div>';
+    bodyEl.querySelectorAll('.lyrics-line').forEach(el => {
+      el.onclick = () => seekToLyricLine(parseInt(el.dataset.index, 10));
+    });
+    startLyricsSyncLoop();
+    updateLyricsSync();
+  } else {
+    syncedLyrics = [];
+    currentLyricsSyncedLines = null;
+    currentLyricsSyncSource = 'none';
+    lyricsSyncEnabled = false;
+    lyricsSyncSource = 'none';
+    stopLyricsSyncLoop();
+    bodyEl.innerHTML = badge + `<div class="lyrics-plain-text">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+  }
+
   document.getElementById('lyricsToolbar').classList.add('show');
   document.getElementById('lyricsShowOriginalBtn').style.display = 'none';
   showingTranslation = false;
@@ -2556,7 +2947,10 @@ document.getElementById('lyricsTranslateBtn').onclick = async () => {
   const myToken = lyricsRequestToken; // still tied to the track currently loaded
 
   if (translationCache.has(langCode)) {
-    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + escapeHtml(translationCache.get(langCode)).replace(/\n/g, '<br>');
+    syncedLyrics = [];
+    lyricsSyncEnabled = false;
+    stopLyricsSyncLoop();
+    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + `<div class="lyrics-plain-text">${escapeHtml(translationCache.get(langCode)).replace(/\n/g, '<br>')}</div>`;
     document.getElementById('lyricsShowOriginalBtn').style.display = '';
     showingTranslation = true;
     return;
@@ -2574,7 +2968,10 @@ document.getElementById('lyricsTranslateBtn').onclick = async () => {
 
   if (translated) {
     translationCache.set(langCode, translated);
-    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + escapeHtml(translated).replace(/\n/g, '<br>');
+    syncedLyrics = [];
+    lyricsSyncEnabled = false;
+    stopLyricsSyncLoop();
+    bodyEl.innerHTML = `<span class="lyrics-ai-badge">&#127760; AI translation (${escapeHtml(langName)})</span>` + `<div class="lyrics-plain-text">${escapeHtml(translated).replace(/\n/g, '<br>')}</div>`;
     document.getElementById('lyricsShowOriginalBtn').style.display = '';
     showingTranslation = true;
   } else {
@@ -2583,7 +2980,16 @@ document.getElementById('lyricsTranslateBtn').onclick = async () => {
 };
 
 document.getElementById('lyricsShowOriginalBtn').onclick = () => {
-  if (currentLyricsRaw) renderLyricsText(currentLyricsRaw, { aiGenerated: currentLyricsIsAI });
+  if (!currentLyricsRaw) return;
+  if (currentLyricsSyncedLines && currentLyricsSyncedLines.length) {
+    renderLyricsText(currentLyricsRaw, {
+      syncedLines: currentLyricsSyncedLines,
+      syncSource: currentLyricsSyncSource,
+      aiGenerated: currentLyricsIsAI
+    });
+  } else {
+    renderLyricsText(currentLyricsRaw, { aiGenerated: currentLyricsIsAI });
+  }
 };
 
 async function refreshLyricsPanel() {
@@ -2604,17 +3010,45 @@ async function refreshLyricsPanel() {
   // Reset per-track AI state — a new track means old translations/AI text no longer apply.
   currentLyricsRaw = null;
   currentLyricsIsAI = false;
+  currentLyricsSyncedLines = null;
+  currentLyricsSyncSource = 'none';
+  syncedLyrics = [];
+  lyricsSyncEnabled = false;
+  lyricsSyncSource = 'none';
+  stopLyricsSyncLoop();
   translationCache = new Map();
   document.getElementById('lyricsToolbar').classList.remove('show');
   document.getElementById('lyricsShowOriginalBtn').style.display = 'none';
 
   const myToken = ++lyricsRequestToken;
+
+  // Try LRCLIB first for real synced (LRC) lyrics — Spotify-style karaoke.
+  const lrcResult = await fetchSyncedLyrics(current);
+  if (myToken !== lyricsRequestToken) return;
+  if (lrcResult) {
+    const plain = lrcResult.plain || (lrcResult.synced && lrcResult.synced.map(l => l.text).join('\n')) || '';
+    currentLyricsRaw = plain;
+    currentLyricsIsAI = false;
+    if (lrcResult.synced && lrcResult.synced.length) {
+      renderLyricsText(plain, { syncedLines: lrcResult.synced, syncSource: 'lrc', aiGenerated: false });
+      return;
+    }
+    if (plain) {
+      const dur = getTrackDurationSec() || current.duration || 0;
+      const estimated = estimateSyncedLines(plain, dur);
+      renderLyricsText(plain, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
+      return;
+    }
+  }
+
   const lyrics = await fetchLyrics(current);
-  if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
+  if (myToken !== lyricsRequestToken) return;
   if (lyrics) {
     currentLyricsRaw = lyrics;
     currentLyricsIsAI = false;
-    renderLyricsText(lyrics, { aiGenerated: false });
+    const dur = getTrackDurationSec() || current.duration || 0;
+    const estimated = estimateSyncedLines(lyrics, dur);
+    renderLyricsText(lyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
     return;
   }
   // No direct lyrics text — try Genius for at least a confirmed match + link.
@@ -2645,7 +3079,9 @@ async function refreshLyricsPanel() {
       if (aiLyrics) {
         currentLyricsRaw = aiLyrics;
         currentLyricsIsAI = true;
-        renderLyricsText(aiLyrics, { aiGenerated: true });
+        const dur = getTrackDurationSec() || current.duration || 0;
+        const estimated = estimateSyncedLines(aiLyrics, dur);
+        renderLyricsText(aiLyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: true });
       } else {
         aiGenBtn.disabled = false;
         aiGenBtn.textContent = "Couldn't generate AI lyrics — try again";
@@ -2658,10 +3094,16 @@ document.getElementById('lyricsBtn').onclick = () => {
   lyricsPanelOpen = !lyricsPanelOpen;
   document.getElementById('lyricsPanel').classList.toggle('show', lyricsPanelOpen);
   document.getElementById('lyricsBtn').classList.toggle('active', lyricsPanelOpen);
-  if (lyricsPanelOpen) refreshLyricsPanel();
+  if (lyricsPanelOpen) {
+    refreshLyricsPanel();
+    startLyricsSyncLoop();
+  } else {
+    stopLyricsSyncLoop();
+  }
 };
 document.getElementById('lyricsPanelClose').onclick = () => {
   lyricsPanelOpen = false;
+  stopLyricsSyncLoop();
   document.getElementById('lyricsPanel').classList.remove('show');
   document.getElementById('lyricsBtn').classList.remove('active');
 };
@@ -2773,6 +3215,7 @@ function onYTStateChange(e) {
     const dur = ytPlayer.getDuration();
     if (dur) totalTimeEl.textContent = formatTime(dur);
     startProgressPolling();
+    refreshEstimatedLyricsSync();
   } else if (e.data === YT.PlayerState.PAUSED) {
     playing = false;
     playBtn.innerHTML = '&#9654;';
@@ -2812,6 +3255,7 @@ function mountSpotify(trackId) {
       playBtn.innerHTML = playing ? '&#10073;&#10073;' : '&#9654;';
       const pos = e.data.position / 1000;
       const dur = e.data.duration / 1000;
+      spotifyPosition = pos;
       if (dur) totalTimeEl.textContent = formatTime(dur);
       curTimeEl.textContent = formatTime(pos);
       progressFill.style.width = dur ? ((pos / dur) * 100) + '%' : '0%';
@@ -2825,6 +3269,7 @@ appleAudio.addEventListener('timeupdate', () => {
   const dur = appleAudio.duration || current.duration || 30;
   progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
   if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
+  if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
 });
 appleAudio.addEventListener('ended', () => {
   if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
@@ -2845,7 +3290,8 @@ function startProgressPolling() {
       totalTimeEl.textContent = formatTime(dur);
       progressFill.style.width = ((cur / dur) * 100) + '%';
     }
-  }, 500);
+    if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
+  }, 250);
 }
 function stopProgressPolling() { clearInterval(progressTimer); }
 
@@ -2950,6 +3396,7 @@ function setPlaying(state) {
         }
         curTimeEl.textContent = formatTime(mockElapsed);
         progressFill.style.width = (mockElapsed / current.duration * 100) + '%';
+        if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
       }, 1000);
     }
   } else if (current.source === 'youtube' && ytPlayer) {
@@ -2979,6 +3426,7 @@ document.getElementById('progressBar').onclick = (e) => {
     const dur = appleAudio.duration || current.duration || 30;
     appleAudio.currentTime = pct * dur;
   }
+  if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
   // Spotify embed seeking isn't exposed by the public Embed API; use its own widget controls in the dock for that.
 };
 
