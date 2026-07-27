@@ -282,20 +282,6 @@
   #spotifyDock .dock-head button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
   #spotifyEmbedFrame { width: 100%; height: 152px; border: none; display: block; }
 
-  #videoDock {
-    position: fixed; right: 16px; bottom: 96px;
-    width: 360px; background: #150c17; border: 1px solid var(--border);
-    border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    display: none; z-index: 50;
-  }
-  #videoDock.show { display: block; }
-  #videoDock .dock-head {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 10px; font-size: 11px; color: var(--text-dim);
-  }
-  #videoDock .dock-head button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; }
-  #videoDock .video-frame-wrap { width: 100%; aspect-ratio: 16/9; background: #000; }
-
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
@@ -354,30 +340,6 @@
   .switch input:checked + .slider { background: var(--accent); }
   .switch input:checked + .slider:before { transform: translateX(18px); background: #1a0f1c; }
 
-  /* Audio FX (equalizer / spatial) panel */
-  .fx-presets { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 16px; }
-  .fx-preset-btn {
-    background: none; border: 1px solid var(--border); color: var(--text-dim);
-    padding: 6px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
-  }
-  .fx-preset-btn.active { background: var(--accent); color: #1a0f1c; border-color: var(--accent); font-weight: 700; }
-  .fx-row { margin-bottom: 16px; }
-  .fx-row-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
-  .fx-row-head span.fx-val { color: var(--text); font-weight: 600; }
-  .fx-slider {
-    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-    border-radius: 2px; background: var(--border); outline: none; cursor: pointer;
-  }
-  .fx-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
-    background: var(--accent); cursor: pointer; border: 2px solid #1a0f1c;
-  }
-  .fx-slider::-moz-range-thumb {
-    width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid #1a0f1c;
-  }
-  .fx-slider:disabled { opacity: 0.35; cursor: not-allowed; }
-  .fx-slider:disabled::-webkit-slider-thumb { background: var(--text-dim); }
-
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; }
 
@@ -420,8 +382,19 @@
   .lyrics-panel-close { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
   .lyrics-panel-close:hover { color: var(--text); }
   .lyrics-panel-body { padding: 14px 16px; overflow-y: auto; white-space: pre-line; font-size: 13px; line-height: 1.8; color: var(--text); }
-  .lyric-line { margin: 0 0 10px; color: var(--text-dim); transition: color 0.2s, transform 0.2s; }
-  .lyric-line.active { color: var(--accent); font-weight: 700; transform: scale(1.03); transform-origin: left center; }
+  .genre-chip {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 18px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .genre-chip:hover { border-color: var(--accent-dim); }
+  .genre-chip.selected { background: var(--accent); color: #1a0f1c; border-color: var(--accent); font-weight: 600; }
+  .genre-chip:active { transform: scale(0.96); }
   .lyrics-loading { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; }
   .lyrics-spinner {
     width: 14px; height: 14px; border-radius: 50%;
@@ -436,7 +409,6 @@
     font-size: 12px; margin-bottom: 14px; width: fit-content;
   }
 </style>
-<link rel="manifest" href="manifest.json">
 </head>
 <body>
 
@@ -484,6 +456,17 @@
   </div>
 </div>
 
+<div id="genreOverlay" style="display:none; position:fixed; inset:0; background:rgba(20,10,22,0.92); align-items:center; justify-content:center; z-index:110;">
+  <div class="auth-card" style="width:420px; max-width:92vw;">
+    <div class="logo"><span class="disc"></span>Streamplay</div>
+    <h3>What do you listen to?</h3>
+    <p class="sub">Pick a few genres — we'll use them to get your recommendations started before we've learned your taste from listening.</p>
+    <div id="genreChipGrid" style="display:flex; flex-wrap:wrap; gap:8px; margin:16px 0;"></div>
+    <button class="auth-submit" id="genreSaveBtn" disabled>Continue</button>
+    <div class="auth-switch" style="margin-top:10px;"><a href="#" id="genreSkipBtn" style="color:var(--text-dim); text-decoration:underline;">Skip for now</a></div>
+  </div>
+</div>
+
 <div id="settingsOverlay" style="display:none; position:fixed; inset:0; background:rgba(20,10,22,0.92); align-items:center; justify-content:center; z-index:120;">
   <div class="modal-card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -495,7 +478,6 @@
       <button class="modal-tab" data-tab="audio">Audio</button>
       <button class="modal-tab" data-tab="friends">Friends &amp; Listen Together</button>
       <button class="modal-tab" data-tab="account">Account</button>
-      <button class="modal-tab" data-tab="feedback">Feedback</button>
     </div>
     <div id="settingsBody"></div>
   </div>
@@ -532,7 +514,7 @@
   <div class="main">
     <div id="partyBanner"></div>
     <div class="topbar">
-      <input class="search" id="searchInput" placeholder="Search songs, artists, or albums..." style="width:100%;">
+      <input class="search" id="searchInput" placeholder="Search songs, artists, albums, or YouTube..." style="width:100%;">
     </div>
     <div id="mainContent"></div>
   </div>
@@ -545,7 +527,6 @@
         <div class="now-artist" id="nowArtist">Pick a track to start</div>
       </div>
       <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
-      <button id="watchVideoBtn" class="lyrics-toggle-btn" title="Watch video" style="display:none;">&#127909; Watch</button>
       <button id="lyricsBtn" class="lyrics-toggle-btn" title="Lyrics">&#127925; Lyrics</button>
     </div>
     <div id="lyricsPanel" class="lyrics-panel">
@@ -586,11 +567,7 @@
 
 </div>
 
-<div id="videoDockHead" style="display:none; position:fixed; right:16px; bottom:326px; width:360px; z-index:51; background:#150c17; border:1px solid var(--border); border-bottom:none; border-radius:10px 10px 0 0; padding:6px 10px; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-dim);">
-  <span id="videoDockTitle">Watching</span>
-  <button id="videoDockClose" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:13px;">&times;</button>
-</div>
-<div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0; right:16px; bottom:96px; z-index:50; border-radius:0 0 10px 10px; box-shadow:0 8px 24px rgba(0,0,0,0.5); background:#000;"></div>
+<div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0;"></div>
 <audio id="applePreviewAudio" preload="none"></audio>
 
 <script>
@@ -681,9 +658,70 @@ document.getElementById('onboardingSaveBtn').onclick = async () => {
   document.getElementById('accountName').textContent = name;
   document.getElementById('avatarInitial').textContent = name.charAt(0).toUpperCase() || '?';
   onboardingOverlay.style.display = 'none';
-  if (!appStarted) { appStarted = true; renderView(); }
+  maybeShowGenreOnboarding(() => { if (!appStarted) { appStarted = true; renderView(); } });
 };
 onboardingName.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('onboardingSaveBtn').click(); });
+
+/* ---- Genre onboarding ----
+   New users (and guests) pick a few genres up front so Home has something
+   tailored to show before real listening signal exists yet — bridges the
+   gap until recommendationRatio() has enough data of its own. */
+const GENRE_LIST = ['Pop', 'Hip-Hop', 'R&B', 'Rock', 'EDM / Dance', 'Indie', 'K-Pop', 'Latin', 'Country', 'Jazz', 'Classical', 'Metal'];
+function genreKey() { return 'streamplay_genres_' + (currentUser ? currentUser.id : 'anon'); }
+function loadGenrePrefs() { try { return JSON.parse(localStorage.getItem(genreKey())); } catch (e) { return null; } }
+function saveGenrePrefs(list) { localStorage.setItem(genreKey(), JSON.stringify(list)); }
+
+let genreOnboardingDone = null;
+function maybeShowGenreOnboarding(afterFn) {
+  const existing = loadGenrePrefs();
+  if (existing !== null) { afterFn(); return; } // already answered (even if they picked none)
+  genreOnboardingDone = afterFn;
+  const grid = document.getElementById('genreChipGrid');
+  const selected = new Set();
+  grid.innerHTML = GENRE_LIST.map(g => `<button type="button" class="genre-chip" data-genre="${escapeHtml(g)}">${escapeHtml(g)}</button>`).join('');
+  grid.querySelectorAll('.genre-chip').forEach(chip => {
+    chip.onclick = () => {
+      const g = chip.dataset.genre;
+      if (selected.has(g)) { selected.delete(g); chip.classList.remove('selected'); }
+      else { selected.add(g); chip.classList.add('selected'); }
+      document.getElementById('genreSaveBtn').disabled = selected.size === 0;
+    };
+  });
+  document.getElementById('genreSaveBtn').disabled = true;
+  document.getElementById('genreOverlay').style.display = 'flex';
+  document.getElementById('genreSaveBtn').onclick = () => {
+    saveGenrePrefs(Array.from(selected));
+    document.getElementById('genreOverlay').style.display = 'none';
+    if (genreOnboardingDone) genreOnboardingDone();
+  };
+  document.getElementById('genreSkipBtn').onclick = (e) => {
+    e.preventDefault();
+    saveGenrePrefs([]); // explicit empty = "asked and skipped", won't nag again
+    document.getElementById('genreOverlay').style.display = 'none';
+    if (genreOnboardingDone) genreOnboardingDone();
+  };
+}
+
+/* Fetches a small batch of real YouTube results per chosen genre, used to
+   seed Home for brand-new users before enough listening signal exists. */
+let genreSeedResults = null;
+let genreSeedPromise = null;
+async function fetchGenreSeeded() {
+  if (genreSeedResults) return genreSeedResults;
+  const genres = loadGenrePrefs();
+  if (!genres || genres.length === 0) return [];
+  if (genreSeedPromise) return genreSeedPromise;
+  genreSeedPromise = (async () => {
+    const batches = await Promise.all(genres.slice(0, 4).map(g => youtubeQuickSearch(`${g} music`, 6)));
+    const seen = new Set();
+    const merged = [];
+    batches.flat().forEach(r => { if (!seen.has(r.videoId)) { seen.add(r.videoId); merged.push(r); } });
+    genreSeedResults = merged;
+    genreSeedPromise = null;
+    return merged;
+  })();
+  return genreSeedPromise;
+}
 
 function renderAuthMode() {
   authError.textContent = '';
@@ -768,7 +806,7 @@ document.getElementById('guestBtn').onclick = (e) => {
   document.getElementById('avatarInitial').textContent = 'G';
   document.getElementById('adminNavLink').style.display = 'none';
   authOverlay.style.display = 'none';
-  if (!appStarted) { appStarted = true; renderView(); }
+  maybeShowGenreOnboarding(() => { if (!appStarted) { appStarted = true; renderView(); } });
 };
 
 document.getElementById('logoutLink').onclick = async () => {
@@ -812,20 +850,6 @@ document.querySelectorAll('.modal-tab').forEach(tab => {
   };
 });
 
-function fxDisplayValue(key, val) {
-  if (key === 'loudness') return (Math.round(val * 10) / 10) + 'x';
-  if (key === 'spatial') return Math.round(val) + '%';
-  return (val > 0 ? '+' : '') + Math.round(val * 10) / 10 + ' dB';
-}
-function fxSliderRow(key, label, min, max, val, unit) {
-  return `
-    <div class="fx-row">
-      <div class="fx-row-head"><span>${label}</span><span class="fx-val" id="fxval_${key}">${fxDisplayValue(key, val)}</span></div>
-      <input type="range" class="fx-slider" id="fx_${key}" min="${min}" max="${max}" step="0.5" value="${val}" ${appSettings.aiEnhance ? '' : 'disabled'}>
-    </div>
-  `;
-}
-
 function renderSettingsTab(tab) {
   if (tab === 'profile') {
     settingsBody.innerHTML = `
@@ -849,57 +873,57 @@ function renderSettingsTab(tab) {
       statusEl.className = 'add-status ok'; statusEl.textContent = 'Saved!';
     };
   } else if (tab === 'audio') {
-    const fx = appSettings.audioFX;
+    const levels = [
+      { id: 'low', label: 'Low', desc: 'Light touch — barely-there compression only.' },
+      { id: 'standard', label: 'Standard', desc: 'Balanced boost — the default most people want.' },
+      { id: 'high', label: 'High (AI FLAC-like)', desc: 'Maximum bass, clarity, and loudness normalization.' },
+    ];
+    const levelIdx = Math.max(0, levels.findIndex(l => l.id === (appSettings.enhanceLevel || 'high')));
     settingsBody.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 0;">
         <div>
           <p class="card-title" style="margin:0 0 4px;">AI Audio Enhance</p>
-          <p class="card-sub" style="margin:0; line-height:1.5;">Flagship-style DSP chain — loudness normalization, bass, vocal clarity, air/treble and spatial width — for Apple/Jamendo tracks. YouTube plays through YouTube's own player, and browsers block outside code from reprocessing cross-origin audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically — loudness normalization, bass boost, vocal clarity and noise/volume balancing — for Apple/Jamendo tracks. YouTube plays through YouTube's own player (which is most of what's in the catalog now), and browsers block outside code from reprocessing that audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
         </div>
         <label class="switch"><input type="checkbox" id="aiEnhanceToggle" ${appSettings.aiEnhance ? 'checked' : ''}><span class="slider"></span></label>
       </div>
-
-      <div class="fx-presets" id="fxPresets">
-        ${['flagship','bass','vocal','spatial','flat'].map(p => `
-          <button class="fx-preset-btn ${fx.preset === p ? 'active' : ''}" data-preset="${p}">${
-            ({ flagship: 'Flagship', bass: 'Bass Boost', vocal: 'Vocal Clarity', spatial: 'Spatial Sound', flat: 'Flat / Off' })[p]
-          }</button>
-        `).join('')}
+      <div style="padding:10px 0; ${appSettings.aiEnhance ? '' : 'opacity:0.4; pointer-events:none;'}" id="enhanceLevelBlock">
+        <p class="card-title" style="margin:0 0 8px;">Enhance level</p>
+        <input type="range" id="enhanceLevelSlider" min="0" max="2" step="1" value="${levelIdx}" style="width:100%;">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+          <span>Low</span><span>Standard</span><span>High (AI FLAC-like)</span>
+        </div>
+        <p class="card-sub" id="enhanceLevelDesc" style="margin:8px 0 0;">${levels[levelIdx].desc}</p>
       </div>
+      <div class="add-hint">Applies to Apple/Jamendo preview playback — the only sources this app can pipe through the Web Audio API. YouTube and Spotify play through their own embedded players, so this won't change those.</div>
 
-      ${fxSliderRow('bass', 'Bass', -6, 12, fx.bass, 'dB')}
-      ${fxSliderRow('treble', 'Treble / Air', -6, 12, fx.treble, 'dB')}
-      ${fxSliderRow('vocal', 'Vocal Clarity', -6, 12, fx.vocal, 'dB')}
-      ${fxSliderRow('loudness', 'Loudness Normalize', 1, 6, fx.loudness, 'x')}
-      ${fxSliderRow('spatial', 'Spatial / Surround Width', 0, 200, fx.spatial, '%')}
-
-      <div class="add-hint">Presets set all sliders at once — tweak any slider afterward to go fully custom. "Spatial / Surround Width" is a mid-side stereo widener (like the virtual-surround mode in phone audio-enhancer apps) — not licensed Dolby Atmos, just our own equivalent effect. Applies to Apple/Jamendo preview playback only; YouTube and Spotify play through their own embedded players.</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 0 10px; margin-top:6px; border-top:1px solid var(--border);">
+        <div>
+          <p class="card-title" style="margin:0 0 4px;">Autoplay</p>
+          <p class="card-sub" style="margin:0;">When a song ends, automatically play something else — pulled from AI recommendations based on your recent listening.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="autoplayToggle" ${appSettings.autoplay ? 'checked' : ''}><span class="slider"></span></label>
+      </div>
     `;
     document.getElementById('aiEnhanceToggle').onchange = (e) => {
       appSettings.aiEnhance = e.target.checked;
       saveSettings(appSettings);
+      document.getElementById('enhanceLevelBlock').style.opacity = e.target.checked ? '1' : '0.4';
+      document.getElementById('enhanceLevelBlock').style.pointerEvents = e.target.checked ? 'auto' : 'none';
       ensureAudioGraph();
       applyEnhanceState();
-      renderSettingsTab('audio');
     };
-    document.querySelectorAll('#fxPresets .fx-preset-btn').forEach(btn => {
-      btn.onclick = () => {
-        applyFxPreset(btn.dataset.preset);
-        renderSettingsTab('audio');
-      };
-    });
-    ['bass','treble','vocal','loudness','spatial'].forEach(key => {
-      const input = document.getElementById('fx_' + key);
-      if (!input) return;
-      input.oninput = (e) => {
-        appSettings.audioFX[key] = parseFloat(e.target.value);
-        appSettings.audioFX.preset = 'custom';
-        document.getElementById('fxval_' + key).textContent = fxDisplayValue(key, appSettings.audioFX[key]);
-        document.querySelectorAll('#fxPresets .fx-preset-btn').forEach(b => b.classList.remove('active'));
-        saveSettings(appSettings);
-        applyEnhanceState();
-      };
-    });
+    document.getElementById('enhanceLevelSlider').oninput = (e) => {
+      const lvl = levels[Number(e.target.value)];
+      appSettings.enhanceLevel = lvl.id;
+      saveSettings(appSettings);
+      document.getElementById('enhanceLevelDesc').textContent = lvl.desc;
+      applyEnhanceState();
+    };
+    document.getElementById('autoplayToggle').onchange = (e) => {
+      appSettings.autoplay = e.target.checked;
+      saveSettings(appSettings);
+    };
   } else if (tab === 'friends') {
     renderFriendsTab();
   } else if (tab === 'account') {
@@ -912,43 +936,6 @@ function renderSettingsTab(tab) {
     `;
     document.getElementById('settingsSwitchAccountBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
     document.getElementById('settingsLogoutBtn').onclick = async () => { leaveParty(); await supabaseClient.auth.signOut(); location.reload(); };
-  } else if (tab === 'feedback') {
-    settingsBody.innerHTML = `
-      <p class="card-sub" style="margin:0 0 10px;">Bug, broken song, feature idea — whatever. Goes straight into the feedback log.</p>
-      <select id="feedbackType" class="auth-input" style="margin-bottom:10px;">
-        <option value="bug">Something's broken</option>
-        <option value="idea">Feature idea</option>
-        <option value="other">Other</option>
-      </select>
-      <textarea id="feedbackText" class="auth-input" rows="5" placeholder="What's going on?" style="resize:vertical; width:100%; font-family:inherit;"></textarea>
-      <button class="add-btn" id="feedbackSubmitBtn" style="margin-top:10px;">Send feedback</button>
-      <div class="add-status" id="feedbackStatus" style="margin-top:10px;"></div>
-    `;
-    document.getElementById('feedbackSubmitBtn').onclick = async () => {
-      const text = document.getElementById('feedbackText').value.trim();
-      const type = document.getElementById('feedbackType').value;
-      const statusEl = document.getElementById('feedbackStatus');
-      if (!text) { statusEl.className = 'add-status error'; statusEl.textContent = 'Type something first.'; return; }
-      statusEl.className = 'add-status'; statusEl.textContent = 'Sending…';
-      try {
-        // Also bundles the last few local playback failures — useful
-        // context for "some songs aren't working" reports without
-        // needing the person to describe exactly which ones.
-        const recentFailures = JSON.parse(localStorage.getItem('streamplay_playback_failures') || '[]').slice(-5);
-        const { error } = await supabaseClient.from('feedback').insert({
-          user_id: currentUser ? currentUser.id : null,
-          type, message: text,
-          context: { recentFailures, userAgent: navigator.userAgent }
-        });
-        if (error) throw error;
-        statusEl.className = 'add-status success';
-        statusEl.textContent = 'Sent — thanks!';
-        document.getElementById('feedbackText').value = '';
-      } catch (e) {
-        statusEl.className = 'add-status error';
-        statusEl.textContent = e.message && e.message.includes('relation') ? 'Feedback table isn\'t set up yet — see the SQL in the project notes.' : ('Couldn\'t send: ' + (e.message || e));
-      }
-    };
   }
 }
 
@@ -958,34 +945,13 @@ function renderSettingsTab(tab) {
    reached by the Web Audio API, so those keep their native embed quality
    regardless of this setting. */
 function settingsKey() { return 'streamplay_settings_' + (currentUser ? currentUser.id : 'anon'); }
-
-// Preset -> slider values. "flagship" is the previous always-on tuning,
-// kept as the default so existing behavior doesn't change for anyone
-// who hasn't touched these controls yet.
-const FX_PRESETS = {
-  flagship: { bass: 4,   treble: 5.5, vocal: 3,   loudness: 3, spatial: 100 },
-  bass:     { bass: 9,   treble: 2,   vocal: 1,   loudness: 3.5, spatial: 100 },
-  vocal:    { bass: 1.5, treble: 4,   vocal: 8,   loudness: 3, spatial: 90 },
-  spatial:  { bass: 3,   treble: 5,   vocal: 2,   loudness: 2.5, spatial: 170 },
-  flat:     { bass: 0,   treble: 0,   vocal: 0,   loudness: 1, spatial: 100 }
-};
 function loadSettings() {
   // AI enhancement is ON by default — no manual setup required. The
   // settings toggle exists only for people who want to turn it OFF.
-  const defaults = { aiEnhance: true, audioFX: Object.assign({ preset: 'flagship' }, FX_PRESETS.flagship) };
-  try {
-    const stored = JSON.parse(localStorage.getItem(settingsKey()));
-    return Object.assign({}, defaults, stored, { audioFX: Object.assign({}, defaults.audioFX, stored && stored.audioFX) });
-  } catch (e) { return defaults; }
+  try { return Object.assign({ aiEnhance: true, autoplay: true, enhanceLevel: 'high' }, JSON.parse(localStorage.getItem(settingsKey()))); }
+  catch (e) { return { aiEnhance: true, autoplay: true, enhanceLevel: 'high' }; }
 }
 function saveSettings(s) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
-function applyFxPreset(name) {
-  const preset = FX_PRESETS[name];
-  if (!preset) return;
-  appSettings.audioFX = Object.assign({ preset: name }, preset);
-  saveSettings(appSettings);
-  applyEnhanceState();
-}
 let appSettings = loadSettings();
 
 /* ---- AI Audio Enhance DSP chain ----
@@ -995,8 +961,6 @@ let appSettings = loadSettings();
    noise reduction / balance            -> high-shelf + gentle makeup gain
    Applied automatically; nothing for the user to configure. */
 let audioCtx = null, enhanceSource = null, enhanceComp = null, enhanceBass = null, enhancePresence = null, enhanceShelf = null, enhanceGain = null;
-// Spatial/surround widener nodes (mid-side stereo width control).
-let spatialSplitter = null, spatialMerger = null, spatialMidGain = null, spatialSideGainL = null, spatialSideGainR = null;
 function ensureAudioGraph() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
   try {
@@ -1011,65 +975,31 @@ function ensureAudioGraph() {
     enhanceShelf = audioCtx.createBiquadFilter(); // air / de-noise balance
     enhanceShelf.type = 'highshelf'; enhanceShelf.frequency.value = 9000; enhanceShelf.gain.value = 0;
     enhanceGain = audioCtx.createGain(); enhanceGain.gain.value = 1; // volume balancing
-
-    // --- Spatial / surround widener ---
-    // Classic mid-side trick: split into L/R, build mid=(L+R)/2 and
-    // side=(L-R)/2, then recombine as outL = mid + side*width,
-    // outR = mid - side*width. width=1 (100%) is untouched stereo;
-    // >1 widens, <1 narrows toward mono. This is our own effect, not
-    // licensed Dolby tech, but gives the same kind of "wider" feel
-    // those phone audio-enhancer apps market as surround/3D mode.
-    spatialSplitter = audioCtx.createChannelSplitter(2);
-    spatialMerger = audioCtx.createChannelMerger(2);
-    const halfL = audioCtx.createGain(); halfL.gain.value = 0.5;
-    const halfR = audioCtx.createGain(); halfR.gain.value = 0.5;
-    spatialMidGain = audioCtx.createGain(); spatialMidGain.gain.value = 1;
-    spatialSplitter.connect(halfL, 0); spatialSplitter.connect(halfR, 1);
-    halfL.connect(spatialMidGain); halfR.connect(spatialMidGain);
-
-    const sideHalfL = audioCtx.createGain(); sideHalfL.gain.value = 0.5;
-    const sideHalfRneg = audioCtx.createGain(); sideHalfRneg.gain.value = -0.5;
-    spatialSplitter.connect(sideHalfL, 0); spatialSplitter.connect(sideHalfRneg, 1);
-    const sideSum = audioCtx.createGain(); sideSum.gain.value = 1;
-    sideHalfL.connect(sideSum); sideHalfRneg.connect(sideSum);
-    const sideInvert = audioCtx.createGain(); sideInvert.gain.value = -1;
-    sideSum.connect(sideInvert);
-
-    spatialSideGainL = audioCtx.createGain(); spatialSideGainL.gain.value = 1; // +side*width -> L
-    spatialSideGainR = audioCtx.createGain(); spatialSideGainR.gain.value = 1; // -side*width -> R
-    sideSum.connect(spatialSideGainL);
-    sideInvert.connect(spatialSideGainR);
-
-    spatialMidGain.connect(spatialMerger, 0, 0);
-    spatialSideGainL.connect(spatialMerger, 0, 0);
-    spatialMidGain.connect(spatialMerger, 0, 1);
-    spatialSideGainR.connect(spatialMerger, 0, 1);
-
-    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(spatialSplitter);
-    spatialMerger.connect(audioCtx.destination);
+    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(audioCtx.destination);
     applyEnhanceState();
   } catch (e) { console.warn('Web Audio graph unavailable:', e.message); }
 }
 function applyEnhanceState() {
   if (!enhanceShelf) { updateQualityBadge(); return; }
-  const fx = appSettings.audioFX;
   if (appSettings.aiEnhance) {
-    enhanceShelf.gain.value = fx.treble;
-    enhanceBass.gain.value = fx.bass;
-    enhancePresence.gain.value = fx.vocal;
-    enhanceComp.ratio.value = fx.loudness;
-    enhanceGain.gain.value = 1 + (fx.loudness - 1) * 0.03; // gentle makeup gain, scales with normalization amount
-    const width = fx.spatial / 100;
-    spatialSideGainL.gain.value = width;
-    spatialSideGainR.gain.value = width;
+    const level = appSettings.enhanceLevel || 'high';
+    const presets = {
+      low:      { shelf: 2,   bass: 1.5, presence: 1,   ratio: 1.6, gain: 1.03 },
+      standard: { shelf: 3.5, bass: 2.5, presence: 2,   ratio: 2.2, gain: 1.06 },
+      high:     { shelf: 5.5, bass: 4,   presence: 3,   ratio: 3,   gain: 1.08 },
+    };
+    const p = presets[level] || presets.high;
+    enhanceShelf.gain.value = p.shelf;
+    enhanceBass.gain.value = p.bass;
+    enhancePresence.gain.value = p.presence;
+    enhanceComp.ratio.value = p.ratio;
+    enhanceGain.gain.value = p.gain;
   } else {
     enhanceShelf.gain.value = 0;
     enhanceBass.gain.value = 0;
     enhancePresence.gain.value = 0;
     enhanceComp.ratio.value = 1;
     enhanceGain.gain.value = 1;
-    spatialSideGainL.gain.value = 1;
-    spatialSideGainR.gain.value = 1;
   }
   updateQualityBadge();
 }
@@ -1080,8 +1010,8 @@ function updateQualityBadge() {
   badge.style.display = '';
   if (current.source === 'apple' || current.source === 'jamendo') {
     if (appSettings.aiEnhance) {
-      const fx = appSettings.audioFX;
-      badge.textContent = fx.spatial > 110 ? 'AI ENHANCED · FLAC-LIKE · SPATIAL' : 'AI ENHANCED · FLAC-LIKE';
+      const levelLabel = { low: 'LOW', standard: 'STANDARD+', high: 'FLAC-LIKE' }[appSettings.enhanceLevel || 'high'];
+      badge.textContent = 'AI ENHANCED · ' + levelLabel;
       badge.style.color = 'var(--accent)'; badge.style.borderColor = 'var(--accent)';
     } else {
       badge.textContent = 'STANDARD';
@@ -1689,47 +1619,42 @@ function loadTrendingCache() {
 function saveTrendingCache(results) {
   try { localStorage.setItem(trendingCacheKey(), JSON.stringify({ ts: Date.now(), results })); } catch (e) { /* ignore */ }
 }
-/* ---- Filtering out covers/karaoke/reactions/irrelevant uploads ----
-   Two passes:
-   1. Heuristic (instant, no network): keyword-based, catches the obvious
-      cases from the title/channel text alone.
-   2. AI second pass (best-effort): sends the survivors' title+channel to
-      the streamplay-ai edge function to judge official vs not. This is a
-      TEXT judgment only — there's no audio analysis/fingerprinting here,
-      just an LLM reading titles the same way heuristics do, more
-      flexibly. If the edge function is unavailable, we silently keep
-      whatever the heuristic pass already produced rather than blocking
-      the UI on it. */
-function isLikelyNotOriginal(title, channel) {
-  const t = (title || '').toLowerCase();
-  const c = (channel || '').toLowerCase();
-  const patterns = [
-    /\bcover(s|ed)?\b/, /\bkaraoke\b/, /\binstrumental\b/, /\breaction(s)?\b/,
-    /\btutorial\b/, /\bhow to (play|sing)\b/, /\btype beat\b/, /\bnightcore\b/,
-    /\bsped up\b/, /\bslowed( \+|,)? ?reverb\b/, /\b1 ?hour\b/, /\bloop(ed)?\b/,
-    /\bfan[- ]?made\b/, /\bunofficial\b/, /\bacoustic cover\b/, /\bmashup\b/,
-    /\b8d audio\b/, /\bringtone\b/, /\bbackwards\b/, /\bwhatsapp status\b/,
-    /\bfull album\b/, /\binterview\b/, /\bvlog\b/
-  ];
-  return patterns.some(p => p.test(t)) || /reacts?( to)?|reaction channel/.test(c);
+/* ---- "People are playing right now" (real, cross-user) ----
+   Backed by the public.track_plays table + increment_track_play() RPC.
+   If that table hasn't been created yet in this Supabase project, this
+   fails quietly and the section just says nobody's played anything —
+   see track-plays-table.sql for the migration. */
+function trackKeyFor(t) {
+  if (t.source === 'youtube') return 'youtube:' + t.videoId;
+  if (t.source === 'local') return 'local:' + t.id;
+  return `${t.source}:${t.id}`;
 }
-async function refineWithAIClassify(list, onRefined) {
-  if (!list.length) return;
-  try {
-    const candidates = list.map(r => ({ title: r.title, channel: r.channel }));
-    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
-      body: { action: 'classify', candidates }
-    });
-    if (error || !data || !Array.isArray(data.results) || !data.results.length) return;
-    const keep = new Set(data.results.filter(x => x.isOriginal !== false).map(x => x.index));
-    const refined = list.filter((_, i) => keep.has(i));
-    // Only apply if the AI pass actually narrowed things down — an empty
-    // or malformed response shouldn't wipe out results the heuristic
-    // pass already approved.
-    if (refined.length && refined.length < list.length) onRefined(refined);
-  } catch (e) {
-    console.warn('[AI classify] skipped (falling back to heuristic filtering only):', e.message);
+function trackFromPlayRow(row) {
+  if (row.source === 'youtube') {
+    return { id: 'yt_' + row.track_key.replace('youtube:', ''), source: 'youtube', videoId: row.track_key.replace('youtube:', ''), name: row.name, artist: row.artist, thumbnail: row.thumbnail, duration: 0 };
   }
+  return mockTracks.find(t => t.id === row.track_key.replace('local:', '')) || { id: row.track_key, source: row.source, name: row.name, artist: row.artist, thumbnail: row.thumbnail, duration: 0 };
+}
+async function fetchTopPlayed() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('track_plays')
+      .select('*')
+      .order('play_count', { ascending: false })
+      .limit(8);
+    if (error || !data) return [];
+    return data.map(trackFromPlayRow);
+  } catch (e) {
+    console.warn('[Top played] fetch failed (has track-plays-table.sql been run?):', e.message);
+    return [];
+  }
+}
+function recordTrackPlay(t) {
+  if (t.source !== 'youtube' && t.source !== 'local') return; // keep the leaderboard to real, resolvable tracks
+  supabaseClient.rpc('increment_track_play', {
+    p_track_key: trackKeyFor(t), p_name: t.name, p_artist: t.artist,
+    p_source: t.source, p_thumbnail: t.thumbnail || null
+  }).then(({ error }) => { if (error) console.warn('[Top played] increment failed:', error.message); });
 }
 
 async function fetchYoutubeTrending() {
@@ -1772,6 +1697,8 @@ function renderHome() {
   const ratio = recommendationRatio();
   const pool = allTracks().concat(loadHistory());
   const personalized = personalizedPicks(pool, 8);
+  const genrePrefs = loadGenrePrefs();
+  const showGenreSeed = personalized.length === 0 && genrePrefs && genrePrefs.length > 0;
 
   mainContent.innerHTML = `
     <div class="add-panel" style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
@@ -1784,9 +1711,27 @@ function renderHome() {
     <div id="aiRecommendStatus" class="add-status" style="margin:-14px 0 14px;"></div>
     <div class="result-grid" id="aiRecommendGrid"></div>
 
+    <h2 class="section-title">People are playing right now</h2>
+    <div class="track-list" id="topPlayedList">
+      ${Array.from({ length: 5 }).map(() => `<div class="track-row"><div class="skeleton-shimmer" style="height:14px; border-radius:4px; width:100%;"></div></div>`).join('')}
+    </div>
+
     ${personalized.length ? `
       <h2 class="section-title">Your mix</h2>
       <div class="track-list" id="trackList"></div>
+    ` : ''}
+
+    ${showGenreSeed ? `
+      <h2 class="section-title">Picked for your genres</h2>
+      <div class="add-status" id="genreSeedStatus" style="display:none;"></div>
+      <div class="result-grid" id="genreSeedGrid">
+        ${Array.from({ length: 6 }).map(() => `
+          <div class="result-card skeleton-card">
+            <div class="art skeleton-shimmer" style="aspect-ratio:1; border-radius:6px; margin-bottom:8px;"></div>
+            <div class="skeleton-shimmer" style="height:11px; border-radius:4px; margin-bottom:6px;"></div>
+          </div>
+        `).join('')}
+      </div>
     ` : ''}
 
     <h2 class="section-title">Trending now on YouTube Music</h2>
@@ -1805,6 +1750,28 @@ function renderHome() {
   if (personalized.length) renderTrackList(document.getElementById('trackList'), personalized);
   document.getElementById('aiRecommendBtn').onclick = fetchAIRecommendations;
 
+  fetchTopPlayed().then(tracks => {
+    if (currentView !== 'home') return;
+    const el = document.getElementById('topPlayedList');
+    if (!el) return;
+    if (!tracks.length) {
+      el.innerHTML = `<div class="empty-state">Nobody's played anything yet on this deployment — be the first, and it'll start showing up here for everyone.</div>`;
+      return;
+    }
+    renderTrackList(el, tracks);
+  });
+
+  if (showGenreSeed) {
+    fetchGenreSeeded().then(results => {
+      if (currentView !== 'home' || searchInput.value.trim()) return;
+      const grid = document.getElementById('genreSeedGrid');
+      const statusEl = document.getElementById('genreSeedStatus');
+      if (!grid) return;
+      if (!results.length) { grid.innerHTML = ''; return; }
+      renderYoutubeResults(results, statusEl, grid);
+    });
+  }
+
   fetchYoutubeTrending().then(results => {
     // Guard against a stale response landing after the person already
     // navigated away or started typing a search.
@@ -1816,11 +1783,7 @@ function renderHome() {
       grid.innerHTML = `<p class="empty-state">Couldn't load trending right now — check your YouTube API key/quota.</p>`;
       return;
     }
-    const heuristicPass = results.filter(r => !isLikelyNotOriginal(r.title, r.channel));
-    renderYoutubeResults(heuristicPass, statusEl, grid);
-    refineWithAIClassify(heuristicPass, (refined) => {
-      if (currentView === 'home' && !searchInput.value.trim()) renderYoutubeResults(refined, statusEl, grid);
-    });
+    renderYoutubeResults(results, statusEl, grid);
   });
 }
 
@@ -1844,7 +1807,7 @@ async function fetchAIRecommendations() {
 
   try {
     const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
-      body: { action: 'recommend', tracks: payload }
+      body: { tracks: payload }
     });
     if (error) throw error;
     const recs = (data && data.recommendations) || [];
@@ -1889,20 +1852,7 @@ async function fetchAIRecommendations() {
     });
   } catch (err) {
     statusEl.className = 'add-status error';
-    // Distinguish "function doesn't exist" from "function exists but
-    // threw" — they need different fixes, and lumping them together
-    // just tells the person to redeploy something that may already be
-    // deployed and simply missing its API-key secret.
-    const status = err && err.context && err.context.status;
-    if (status === 404) {
-      statusEl.textContent = 'Streamplay AI isn\'t deployed yet. Run: supabase functions deploy streamplay-ai (see streamplay-ai/index.ts).';
-    } else if (status === 401 || status === 403) {
-      statusEl.textContent = 'Streamplay AI rejected the request (unauthorized). Check you\'re logged in and that the function\'s JWT verification settings match your Supabase project.';
-    } else if (status >= 500 || !status) {
-      statusEl.textContent = 'Streamplay AI is deployed but errored server-side — most likely a missing API key secret. Run: supabase secrets set ANTHROPIC_API_KEY=sk-ant-... for the project, then try again. (' + (err.message || err) + ')';
-    } else {
-      statusEl.textContent = 'Could not reach Streamplay AI. (' + (err.message || err) + ')';
-    }
+    statusEl.textContent = 'Could not reach Streamplay AI. Make sure the Edge Function is deployed. (' + (err.message || err) + ')';
   }
 }
 
@@ -2124,17 +2074,12 @@ async function runYoutubeSearch(q) {
       channel: r.snippet.channelTitle,
       thumbnail: r.snippet.thumbnails.medium.url,
       duration: durationById[r.id.videoId] || 0
-    })).filter(r => !isLikelyNotOriginal(r.title, r.channel));
+    }));
 
     ytSearchCache.set(cacheKey, results);
     statusEl.className = 'add-status';
     console.log('[YT DEBUG] Calling renderYoutubeResults() with', results.length, 'processed result(s).');
     renderYoutubeResults(results, statusEl, gridEl);
-    refineWithAIClassify(results, (refined) => {
-      if (myToken !== ytSearchToken) return;
-      ytSearchCache.set(cacheKey, refined);
-      renderYoutubeResults(refined, statusEl, gridEl);
-    });
   } catch (err) {
     if (myToken !== ytSearchToken) return;
     console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
@@ -2445,79 +2390,17 @@ async function fetchLyrics(track) {
   return null;
 }
 
-/* ---- Synced lyrics (LRCLIB — free, no key, CORS-enabled) ----
-   Tried first: if it has line-by-line timestamps for this track, we
-   render karaoke-style highlighting. Falls back to lyrics.ovh's plain
-   text, then the Genius link-out, same as before. */
-function parseLRC(lrcText) {
-  const lines = [];
-  (lrcText || '').split('\n').forEach(line => {
-    const m = line.match(/^\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\](.*)$/);
-    if (!m) return;
-    const time = parseInt(m[1], 10) * 60 + parseFloat(m[2]);
-    const text = m[3].trim();
-    if (text) lines.push({ time, text });
-  });
-  return lines.sort((a, b) => a.time - b.time);
-}
-async function fetchSyncedLyricsOnce(artist, title) {
-  try {
-    const params = new URLSearchParams({ track_name: title, artist_name: artist });
-    const res = await fetch(`https://lrclib.net/api/search?${params}`);
-    if (!res.ok) return null;
-    const results = await res.json();
-    if (!Array.isArray(results) || !results.length) return null;
-    return results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || null;
-  } catch (e) {
-    console.warn('[LRCLIB] fetch failed:', e.message);
-    return null;
-  }
-}
-async function fetchSyncedLyrics(track) {
-  for (const c of lyricsCandidates(track)) {
-    if (!c.artist || !c.title) continue;
-    const result = await fetchSyncedLyricsOnce(c.artist, c.title);
-    if (result && result.syncedLyrics) return { synced: parseLRC(result.syncedLyrics), plain: result.plainLyrics || null };
-    if (result && result.plainLyrics) return { synced: null, plain: result.plainLyrics };
-  }
-  return null;
-}
-
-// Drives the karaoke-style highlight. Called from both the <audio>
-// timeupdate handler (Apple/Jamendo) and the YouTube progress-poll
-// interval, so it works regardless of playback source.
-let currentLyricsLines = null;
-function updateLyricsHighlight(t) {
-  if (!currentLyricsLines || !lyricsPanelOpen) return;
-  let activeIdx = -1;
-  for (let i = 0; i < currentLyricsLines.length; i++) {
-    if (currentLyricsLines[i].time <= t) activeIdx = i; else break;
-  }
-  const body = document.getElementById('lyricsPanelBody');
-  if (!body) return;
-  const prev = body.querySelector('.lyric-line.active');
-  if (prev) prev.classList.remove('active');
-  if (activeIdx >= 0) {
-    const el = document.getElementById('lyricLine' + activeIdx);
-    if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-  }
-}
-
-/* Fallback when lyrics.ovh has nothing: ask the streamplay-ai edge
-   function to check Genius for a confirmed match. Genius's API doesn't
-   return lyrics text (by their own design, for licensing reasons), and
-   this app doesn't scrape or reproduce lyrics from anywhere else either
-   — so this only returns metadata + a link to view the real lyrics on
-   Genius's own page. */
-async function fetchGeniusMatch(artist, title) {
+async function fetchGeniusFallback(track) {
+  const cleanTitle = cleanForLyrics(track.name);
+  const cleanArtist = cleanForLyrics(track.artist);
   try {
     const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
-      body: { action: 'lyrics-lookup', artist, title }
+      body: { action: 'lyrics-lookup', artist: cleanArtist || track.artist, title: cleanTitle || track.name }
     });
     if (error || !data) return null;
-    return data.match || null;
+    return data.match || null; // { title, artist, url, thumbnail } or null
   } catch (e) {
-    console.warn('[Genius lookup] skipped:', e.message);
+    console.warn('[Lyrics] Genius fallback failed:', e.message);
     return null;
   }
 }
@@ -2527,7 +2410,6 @@ async function refreshLyricsPanel() {
   const subEl = document.getElementById('lyricsPanelSub');
   const bodyEl = document.getElementById('lyricsPanelBody');
   if (!titleEl) return;
-  currentLyricsLines = null;
   if (!current) {
     titleEl.textContent = 'Lyrics';
     subEl.textContent = '';
@@ -2538,49 +2420,24 @@ async function refreshLyricsPanel() {
   subEl.textContent = current.artist;
   bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Finding lyrics…</div>`;
   const myToken = ++lyricsRequestToken;
-
-  // Try synced (LRCLIB) first — karaoke-style highlighting if it has one.
-  const syncedResult = await fetchSyncedLyrics(current);
-  if (myToken !== lyricsRequestToken) return;
-  if (syncedResult && syncedResult.synced && syncedResult.synced.length) {
-    currentLyricsLines = syncedResult.synced;
-    bodyEl.innerHTML = syncedResult.synced
-      .map((l, i) => `<p class="lyric-line" id="lyricLine${i}">${escapeHtml(l.text)}</p>`)
-      .join('');
-    const t = current.source === 'youtube' && ytPlayer && ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : appleAudio.currentTime;
-    updateLyricsHighlight(t || 0);
-    return;
-  }
-  if (syncedResult && syncedResult.plain) {
-    bodyEl.innerHTML = escapeHtml(syncedResult.plain).replace(/\n/g, '<br>');
-    return;
-  }
-
-  // LRCLIB had nothing at all — fall back to lyrics.ovh (plain text only).
   const lyrics = await fetchLyrics(current);
   if (myToken !== lyricsRequestToken) return; // a newer track's request landed already
   if (lyrics) {
     bodyEl.innerHTML = escapeHtml(lyrics).replace(/\n/g, '<br>');
     return;
   }
-  // Nothing anywhere — try Genius for a confirmed match card.
-  const geniusMatch = await fetchGeniusMatch(current.artist, current.name);
+  // No direct lyrics text — try Genius for at least a confirmed match + link.
+  const geniusMatch = await fetchGeniusFallback(current);
   if (myToken !== lyricsRequestToken) return;
   if (geniusMatch && geniusMatch.url) {
     bodyEl.innerHTML = `
-      <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
-        ${geniusMatch.thumbnail ? `<img src="${geniusMatch.thumbnail}" style="width:52px; height:52px; border-radius:6px; object-fit:cover;">` : ''}
-        <div>
-          <p style="margin:0; font-weight:600; font-size:13px;">${escapeHtml(geniusMatch.title || current.name)}</p>
-          <p style="margin:0; color:var(--text-dim); font-size:12px;">${escapeHtml(geniusMatch.artist || current.artist)}</p>
-        </div>
-      </div>
-      <p class="empty-state" style="margin:0 0 10px;">Confirmed match on Genius — full lyrics live on their page (we don't reproduce lyrics text directly here).</p>
-      <a href="${geniusMatch.url}" target="_blank" rel="noopener" class="add-btn" style="display:inline-block; text-decoration:none;">View lyrics on Genius &rarr;</a>
-    `;
-    return;
+      <p class="empty-state" style="margin:0 0 10px;">Couldn't pull the lyrics text directly, but found a match:</p>
+      <a href="${geniusMatch.url}" target="_blank" rel="noopener" class="add-btn" style="display:inline-block; text-decoration:none;">
+        View "${escapeHtml(geniusMatch.title)}" on Genius &#8599;
+      </a>`;
+  } else {
+    bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>`;
   }
-  bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>`;
 }
 
 document.getElementById('lyricsBtn').onclick = () => {
@@ -2600,34 +2457,6 @@ document.getElementById('spotifyDockClose').onclick = () => {
   if (current && current.source === 'spotify') setPlaying(false);
 };
 
-// Video-watch mode. The YT player element is REPOSITIONED via inline
-// style, never hidden with display:none — a display:none iframe can
-// stop YouTube playback in some browsers, and this app relies on the
-// player staying "technically visible" (1x1, opacity 0) to keep audio
-// going while parked off-screen the rest of the time.
-let videoWatchMode = false;
-const ytHolder = document.getElementById('ytPlayerHolder');
-const videoDockHead = document.getElementById('videoDockHead');
-function setVideoWatchMode(on) {
-  videoWatchMode = on && current && current.source === 'youtube';
-  if (videoWatchMode) {
-    ytHolder.style.width = '360px';
-    ytHolder.style.height = '202px';
-    ytHolder.style.opacity = '1';
-    videoDockHead.style.display = 'flex';
-    document.getElementById('videoDockTitle').textContent = 'Watching · ' + current.name;
-    document.getElementById('watchVideoBtn').textContent = '\u25A0 Hide video';
-  } else {
-    ytHolder.style.width = '1px';
-    ytHolder.style.height = '1px';
-    ytHolder.style.opacity = '0';
-    videoDockHead.style.display = 'none';
-    document.getElementById('watchVideoBtn').textContent = '\uD83C\uDFA5 Watch';
-  }
-}
-document.getElementById('watchVideoBtn').onclick = () => setVideoWatchMode(!videoWatchMode);
-document.getElementById('videoDockClose').onclick = () => setVideoWatchMode(false);
-
 let ytPlayer = null;
 let ytReady = false;
 let ytPendingVideoId = null;
@@ -2645,61 +2474,83 @@ window.onYouTubeIframeAPIReady = function() {
         ytReady = true;
         if (ytPendingVideoId) { ytPlayer.loadVideoById(ytPendingVideoId); ytPendingVideoId = null; }
       },
-      onStateChange: onYTStateChange,
-      onError: onYTError
+      onStateChange: onYTStateChange
     }
   });
 };
-// Common causes a track "doesn't work": 2=bad video id, 5=HTML5 player
-// error, 100=video removed/private, 101/150=embedding disabled by the
-// uploader (very common for major-label official audio). We can't work
-// around 101/150 — that's the rights holder's own setting — but we can
-// at least tell the person clearly instead of leaving a dead player, and
-// move on to the next queued track automatically.
-function onYTError(e) {
-  if (!current || current.source !== 'youtube') return;
-  const reasons = {
-    2: 'invalid video', 5: 'playback error', 100: 'video removed or private',
-    101: 'embedding disabled by the uploader', 150: 'embedding disabled by the uploader'
-  };
-  const reason = reasons[e.data] || 'unknown playback error';
-  console.warn('[YT] Playback failed for', current.name, '-', reason);
-  showToast(`Can't play "${current.name}" — ${reason}`);
-  playing = false;
-  playBtn.innerHTML = '&#9654;';
-  stopProgressPolling();
-  logPlaybackFailure(current, reason);
-}
-
-// Lightweight toast — no queue/next-track system exists in this app yet,
-// so a failed track just stops playback with a clear reason instead of
-// silently sitting there.
-function showToast(message) {
-  let el = document.getElementById('appToast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'appToast';
-    el.style.cssText = 'position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:#1a0f1c; border:1px solid var(--border); color:var(--text); padding:10px 16px; border-radius:8px; font-size:13px; z-index:9999; max-width:80vw; text-align:center; box-shadow:0 4px 16px rgba(0,0,0,0.4);';
-    document.body.appendChild(el);
-  }
-  el.textContent = message;
-  el.style.opacity = '1';
-  clearTimeout(el._hideTimer);
-  el._hideTimer = setTimeout(() => { el.style.opacity = '0'; }, 4000);
-}
-
-// Keeps a rolling local log of playback failures (source, reason,
-// timestamp). This is the raw material an "AI monitoring" pass could
-// later summarize — see the note in chat about what that feature should
-// actually do before it's built further.
-function logPlaybackFailure(track, reason) {
+/* Lightweight YouTube search — no duration lookup, used internally for
+   autoplay resolution and genre-seeding rather than the full search UI. */
+async function youtubeQuickSearch(query, maxResults) {
+  maxResults = maxResults || 1;
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') return [];
   try {
-    const key = 'streamplay_playback_failures';
-    const log = JSON.parse(localStorage.getItem(key) || '[]');
-    log.push({ name: track.name, artist: track.artist, source: track.source, reason, at: Date.now() });
-    localStorage.setItem(key, JSON.stringify(log.slice(-200)));
-  } catch (e) { /* non-critical */ }
+    const params = new URLSearchParams({
+      part: 'snippet', q: query, type: 'video', videoCategoryId: '10',
+      maxResults: String(maxResults), key: YOUTUBE_API_KEY
+    });
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
+    const data = await res.json();
+    if (!res.ok) return [];
+    return (data.items || []).map(r => ({
+      videoId: r.id.videoId, title: r.snippet.title, channel: r.snippet.channelTitle,
+      thumbnail: (r.snippet.thumbnails.medium || r.snippet.thumbnails.default).url, duration: 0
+    }));
+  } catch (e) { console.warn('[YT quick search] failed:', e.message); return []; }
 }
+
+/* ---- Autoplay, fed by AI recommendations ----
+   When a track ends, we don't just stop — we ask the streamplay-ai edge
+   function ('recommend' action) for songs based on recent history, then
+   resolve the first one to an actual playable YouTube result. Falls back
+   to trending/personalized picks if there's no login, no history yet, or
+   the edge function is unreachable — autoplay should never just go dead. */
+let aiQueue = [];
+let aiQueueIndex = 0;
+
+async function refillAIQueue() {
+  const seed = loadHistory().slice(0, 15).map(t => ({ name: t.name, artist: t.artist }));
+  if (seed.length === 0) return [];
+  try {
+    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
+      body: { action: 'recommend', tracks: seed }
+    });
+    if (error || !data || !Array.isArray(data.recommendations)) return [];
+    return data.recommendations;
+  } catch (e) {
+    console.warn('[Autoplay] recommend call failed:', e.message);
+    return [];
+  }
+}
+
+async function getNextAutoplayTrack() {
+  if (aiQueueIndex >= aiQueue.length) {
+    aiQueue = await refillAIQueue();
+    aiQueueIndex = 0;
+  }
+  while (aiQueueIndex < aiQueue.length) {
+    const item = aiQueue[aiQueueIndex++];
+    if (!item || !item.name) continue;
+    const results = await youtubeQuickSearch(`${item.name} ${item.artist || ''}`.trim(), 1);
+    if (results.length) return ytResultToTrack(results[0]);
+  }
+  return null;
+}
+
+async function handleTrackEnded() {
+  if (!appSettings.autoplay) return;
+  let next = null;
+  if (currentUser && !isGuest) next = await getNextAutoplayTrack();
+  if (!next && trendingResults && trendingResults.length) {
+    const pool = trendingResults.filter(r => !current || ('yt_' + r.videoId) !== current.id);
+    if (pool.length) next = ytResultToTrack(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  if (!next) {
+    const pool = personalizedPicks(allTracks().concat(loadHistory()), 10).filter(t => !current || t.id !== current.id);
+    if (pool.length) next = pool[Math.floor(Math.random() * pool.length)];
+  }
+  if (next) playTrack(next);
+}
+
 function onYTStateChange(e) {
   if (!current || current.source !== 'youtube') return;
   if (e.data === YT.PlayerState.PLAYING) {
@@ -2718,6 +2569,7 @@ function onYTStateChange(e) {
     stopProgressPolling();
     progressFill.style.width = '0%';
     curTimeEl.textContent = '0:00';
+    handleTrackEnded();
   }
 }
 
@@ -2759,13 +2611,13 @@ appleAudio.addEventListener('timeupdate', () => {
   const dur = appleAudio.duration || current.duration || 30;
   progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
   if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
-  updateLyricsHighlight(appleAudio.currentTime);
 });
 appleAudio.addEventListener('ended', () => {
   if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
   setPlaying(false);
   progressFill.style.width = '0%';
   curTimeEl.textContent = '0:00';
+  handleTrackEnded();
 });
 
 function startProgressPolling() {
@@ -2779,7 +2631,6 @@ function startProgressPolling() {
       totalTimeEl.textContent = formatTime(dur);
       progressFill.style.width = ((cur / dur) * 100) + '%';
     }
-    updateLyricsHighlight(cur);
   }, 500);
 }
 function stopProgressPolling() { clearInterval(progressTimer); }
@@ -2811,6 +2662,7 @@ function playTrack(t, opts) {
   mockElapsed = 0;
   trackEvent('play', t);
   pushHistory(t);
+  recordTrackPlay(t);
   logListeningEvent(t);
   if (!opts.fromParty) broadcastTrackToParty(t);
   if (lyricsPanelOpen) refreshLyricsPanel();
@@ -2828,15 +2680,6 @@ function playTrack(t, opts) {
   totalTimeEl.textContent = t.duration ? formatTime(t.duration) : '0:00';
   progressFill.style.width = '0%';
   updateQualityBadge();
-
-  const watchBtn = document.getElementById('watchVideoBtn');
-  if (t.source === 'youtube') {
-    watchBtn.style.display = '';
-    if (videoWatchMode) setVideoWatchMode(true); // stay in watch mode, just retitle for the new track
-  } else {
-    watchBtn.style.display = 'none';
-    if (videoWatchMode) setVideoWatchMode(false); // non-YouTube tracks have nothing to show in the dock
-  }
 
   if (t.source === 'local') {
     setPlaying(true);
@@ -2889,6 +2732,7 @@ function setPlaying(state) {
         if (mockElapsed >= current.duration) {
           mockElapsed = 0;
           setPlaying(false);
+          handleTrackEnded();
         }
         curTimeEl.textContent = formatTime(mockElapsed);
         progressFill.style.width = (mockElapsed / current.duration * 100) + '%';
@@ -2983,7 +2827,9 @@ async function startApp(user) {
     return; // app starts once they confirm their name in onboardingSaveBtn's handler
   }
 
-  if (!appStarted) { appStarted = true; renderView(); }
+  if (!appStarted) {
+    maybeShowGenreOnboarding(() => { appStarted = true; renderView(); });
+  }
   else if (currentView === 'admin') { renderView(); } // refresh admin data if already viewing it
 }
 
@@ -2992,13 +2838,6 @@ async function startApp(user) {
 supabaseClient.auth.getSession().then(({ data: { session } }) => {
   if (session && session.user) startApp(session.user);
 });
-</script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch(e => console.warn('SW registration failed:', e));
-  });
-}
 </script>
 </body>
 </html>
