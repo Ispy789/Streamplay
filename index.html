@@ -473,49 +473,45 @@
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 
-  .lyrics-toggle-btn {
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.1);
-    color: var(--text2);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 20px;
+  .now-playing {
     cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: 0.25s;
+    border-radius: 14px;
+    transition: background 0.2s ease;
   }
-  .lyrics-toggle-btn:hover { color: white; border-color: rgba(233,196,106,.4); background: rgba(255,255,255,.08); }
-  .lyrics-toggle-btn.active {
-    background: linear-gradient(135deg, rgba(255,215,122,.25), rgba(233,196,106,.15));
-    color: var(--gold);
-    border-color: rgba(233,196,106,.45);
-  }
+  .now-playing:hover { background: rgba(255,255,255,.05); }
+  .now-playing.lyrics-active { background: rgba(233,196,106,.08); }
+
   @media (max-width: 900px) {
-    .lyrics-panel { inset: 18px 18px 130px 18px; }
+    .lyrics-panel { inset: 0; border-radius: 0; }
     .lyrics-line { font-size: 22px; }
     .lyrics-line.past, .lyrics-line.upcoming { font-size: 18px; }
   }
 
   .lyrics-panel {
     position: fixed;
-    inset: 18px 18px 130px 270px;
-    background: rgba(10,11,14,.88);
-    backdrop-filter: blur(40px);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 28px;
-    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(480px, 100vw);
+    background: rgba(10,11,14,.92);
+    backdrop-filter: blur(50px);
+    -webkit-backdrop-filter: blur(50px);
+    border-left: 1px solid rgba(255,255,255,.08);
+    box-shadow: -24px 0 60px rgba(0,0,0,.55);
     display: flex;
     flex-direction: column;
     opacity: 0;
-    transform: scale(0.98);
+    transform: translateX(100%);
     pointer-events: none;
-    transition: opacity 0.28s ease, transform 0.28s ease;
+    transition: opacity 0.32s ease, transform 0.32s ease;
     z-index: 90;
     overflow: hidden;
   }
-  .lyrics-panel.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+  .lyrics-panel.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+  @media (max-width: 900px) {
+    .lyrics-panel { transform: translateY(100%); }
+    .lyrics-panel.show { transform: translateY(0); }
+  }
   .lyrics-panel-head {
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 22px 28px 16px;
@@ -539,7 +535,7 @@
   .lyrics-panel-close:hover { color: white; background: rgba(255,255,255,.1); }
   .lyrics-panel-body {
     flex: 1;
-    padding: 32px 28px 48px;
+    padding: 24px 28px 60px;
     overflow-y: auto;
     overflow-x: hidden;
     mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
@@ -549,28 +545,27 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 18px;
-    max-width: 640px;
-    margin: 0 auto;
-    padding: 24px 0 80px;
+    gap: 16px;
+    margin: 0;
+    padding: 24px 0 100px;
   }
   .lyrics-line {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
     line-height: 1.35;
     letter-spacing: -0.02em;
-    color: rgba(255,255,255,.28);
+    color: rgba(255,255,255,.35);
     transition: color 0.35s ease, transform 0.35s ease, opacity 0.35s ease;
     cursor: pointer;
     transform-origin: left center;
   }
-  .lyrics-line.past { color: rgba(255,255,255,.18); font-weight: 600; font-size: 24px; }
+  .lyrics-line.past { color: rgba(255,255,255,.2); }
   .lyrics-line.active {
     color: white;
-    transform: scale(1.04);
+    transform: scale(1.03);
     text-shadow: 0 0 40px rgba(233,196,106,.25);
   }
-  .lyrics-line.upcoming { color: rgba(255,255,255,.32); font-weight: 600; font-size: 26px; }
+  .lyrics-line.upcoming { color: rgba(255,255,255,.35); }
   .lyrics-plain-text { font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-line; }
   .lyrics-sync-badge {
     display: inline-flex;
@@ -775,20 +770,19 @@
   <div class="main">
     <div id="partyBanner"></div>
     <div class="topbar">
-      <input class="search" id="searchInput" placeholder="Search songs, artists, albums, or YouTube..." style="width:100%;">
+      <input class="search" id="searchInput" placeholder="Search songs, artists, albums..." style="width:100%;">
     </div>
     <div id="mainContent"></div>
   </div>
 
   <div class="player">
-    <div class="now-playing">
+    <div class="now-playing" id="nowPlaying" title="Show lyrics">
       <div class="now-art" id="nowArt"></div>
       <div class="now-info">
         <div class="now-title" id="nowTitle">Nothing playing</div>
         <div class="now-artist" id="nowArtist">Pick a track to start</div>
       </div>
       <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
-      <button id="lyricsBtn" class="lyrics-toggle-btn" title="Lyrics">&#127925; Lyrics</button>
     </div>
     <div id="lyricsPanel" class="lyrics-panel">
       <div class="lyrics-panel-head">
@@ -1313,8 +1307,8 @@ function updateQualityBadge() {
     // YouTube iframe audio, so "AI Enhance" genuinely can't touch this —
     // showing an ENHANCED badge here would be lying. We do still ask
     // YouTube for its best available stream quality.
-    badge.textContent = 'YOUTUBE HD';
-    badge.title = "Played via YouTube's own player at its best available quality — AI Enhance can't reprocess this audio (cross-origin restriction).";
+    badge.textContent = 'HD';
+    badge.title = "Playing at the best available streaming quality.";
     badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
   } else {
     badge.style.display = 'none';
@@ -2026,7 +2020,7 @@ function renderHome() {
       </div>
     ` : ''}
 
-    <h2 class="section-title">Trending now on YouTube Music</h2>
+    <h2 class="section-title">Trending now</h2>
     <div class="add-status" id="trendingStatus" style="display:none;"></div>
     <div class="result-grid" id="trendingGrid">
       ${Array.from({ length: 8 }).map(() => `
@@ -2188,7 +2182,7 @@ function renderSearchResults(query) {
   `;
   const listEl = document.getElementById('trackList');
   if (combined.length === 0) {
-    listEl.innerHTML = `<div class="empty-state">Nothing saved matches yet — check below for YouTube results.</div>`;
+    listEl.innerHTML = `<div class="empty-state">Nothing saved matches yet — check below for more results.</div>`;
   } else {
     renderTrackList(listEl, combined);
   }
@@ -2300,7 +2294,7 @@ async function runYoutubeSearch(q) {
   }
   console.log('[YT DEBUG] Cache MISS for query:', cacheKey, '- proceeding to fetch.');
 
-  statusEl.className = 'add-status'; statusEl.textContent = 'Searching YouTube...';
+  statusEl.className = 'add-status'; statusEl.textContent = 'Searching...';
   gridEl.innerHTML = '';
   try {
     const params = new URLSearchParams({
@@ -2333,7 +2327,7 @@ async function runYoutubeSearch(q) {
     if (items.length === 0) {
       console.log('[YT DEBUG] STOP: zero results for this query (not an error — API call succeeded).');
       ytSearchCache.set(cacheKey, []);
-      statusEl.textContent = 'No YouTube matches found.';
+      statusEl.textContent = 'No matches found.';
       return;
     }
 
@@ -2376,14 +2370,14 @@ async function runYoutubeSearch(q) {
     if (myToken !== ytSearchToken) return;
     console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
     statusEl.className = 'add-status error';
-    statusEl.textContent = 'YouTube search failed: ' + (err.message || 'check your connection and API key.');
+    statusEl.textContent = 'Search failed: ' + (err.message || 'check your connection.');
   }
 }
 
 function ytResultToTrack(r) {
   return {
     id: 'yt_' + r.videoId, source: 'youtube', videoId: r.videoId,
-    name: r.title, artist: r.channel, album: 'YouTube',
+    name: r.title, artist: r.channel, album: '',
     duration: r.duration, thumbnail: r.thumbnail
   };
 }
@@ -2391,7 +2385,7 @@ function ytResultToTrack(r) {
 function renderYoutubeResults(results, statusEl, gridEl) {
   console.log('[YT DEBUG] renderYoutubeResults() executing with', results.length, 'result(s):', results);
   if (results.length === 0) {
-    if (statusEl) statusEl.textContent = 'No YouTube matches found.';
+    if (statusEl) statusEl.textContent = 'No matches found.';
     gridEl.innerHTML = '';
     return;
   }
@@ -3065,7 +3059,7 @@ async function refreshLyricsPanel() {
       </div>`;
   } else {
     bodyEl.innerHTML = `
-      <p class="empty-state" style="margin:0 0 10px;">No lyrics found for this one — the title/artist tags from YouTube may be too different from what the lyrics databases have on file.</p>
+      <p class="empty-state" style="margin:0 0 10px;">No lyrics found for this one — the title/artist tags may be too different from what the lyrics databases have on file.</p>
       <button id="lyricsAiGenBtn" class="lyrics-mini-btn">&#10024; Try AI lyrics instead</button>`;
   }
 
@@ -3090,10 +3084,11 @@ async function refreshLyricsPanel() {
   }
 }
 
-document.getElementById('lyricsBtn').onclick = () => {
+document.getElementById('nowPlaying').onclick = () => {
+  if (!current) return;
   lyricsPanelOpen = !lyricsPanelOpen;
   document.getElementById('lyricsPanel').classList.toggle('show', lyricsPanelOpen);
-  document.getElementById('lyricsBtn').classList.toggle('active', lyricsPanelOpen);
+  document.getElementById('nowPlaying').classList.toggle('lyrics-active', lyricsPanelOpen);
   if (lyricsPanelOpen) {
     refreshLyricsPanel();
     startLyricsSyncLoop();
@@ -3101,11 +3096,12 @@ document.getElementById('lyricsBtn').onclick = () => {
     stopLyricsSyncLoop();
   }
 };
-document.getElementById('lyricsPanelClose').onclick = () => {
+document.getElementById('lyricsPanelClose').onclick = (e) => {
+  e.stopPropagation();
   lyricsPanelOpen = false;
   stopLyricsSyncLoop();
   document.getElementById('lyricsPanel').classList.remove('show');
-  document.getElementById('lyricsBtn').classList.remove('active');
+  document.getElementById('nowPlaying').classList.remove('lyrics-active');
 };
 
 document.getElementById('spotifyDockClose').onclick = () => {
