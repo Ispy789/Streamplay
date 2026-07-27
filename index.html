@@ -480,35 +480,25 @@
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 
-  .lyrics-backdrop {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.45);
-    backdrop-filter: blur(50px);
-    -webkit-backdrop-filter: blur(50px);
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.35s ease;
-    z-index: 88;
-  }
-  .lyrics-backdrop.show { opacity: 1; pointer-events: auto; }
+  .lyrics-backdrop { display: none; }
 
   .lyrics-panel {
     position: fixed;
-    top: 0; right: 0; bottom: 0;
-    width: min(420px, 38vw);
-    background: rgba(10,11,14,.92);
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(7,8,9,.96);
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border-left: 1px solid rgba(255,255,255,.08);
-    box-shadow: -24px 0 60px rgba(0,0,0,.55);
     display: flex;
     flex-direction: column;
-    transform: translateX(100%);
+    transform: translateY(100%);
     pointer-events: none;
     transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
     z-index: 90;
     overflow: hidden;
   }
-  .lyrics-panel.show { transform: translateX(0); pointer-events: auto; }
+  .lyrics-panel.show { transform: translateY(0); pointer-events: auto; }
 
   .lyrics-panel-close {
     position: absolute; top: 18px; right: 18px;
@@ -562,11 +552,13 @@
   .lyrics-sync-view {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 22px;
-    max-width: 100%;
+    max-width: 640px;
+    width: 100%;
     margin: 0 auto;
     padding: 16px 0 100px;
+    text-align: center;
   }
   .lyrics-line {
     font-size: 20px;
@@ -577,7 +569,7 @@
     opacity: 0.35;
     transition: color 0.4s ease, font-size 0.4s ease, opacity 0.4s ease, font-weight 0.4s ease;
     cursor: pointer;
-    transform-origin: left center;
+    transform-origin: center center;
     width: 100%;
   }
   .lyrics-line.past {
@@ -599,18 +591,7 @@
     opacity: 0.35;
   }
 
-  @media (max-width: 1024px) {
-    .lyrics-panel { width: 70%; }
-    .lyrics-cover { width: 150px; height: 150px; }
-  }
   @media (max-width: 640px) {
-    .lyrics-panel {
-      left: 0; right: 0; width: 100%;
-      border-left: none;
-      transform: translateY(100%);
-      border-radius: 0;
-    }
-    .lyrics-panel.show { transform: translateY(0); }
     .lyrics-cover { width: 140px; height: 140px; }
     .lyrics-line.active { font-size: 26px; }
   }
@@ -2802,7 +2783,6 @@ function updateLyricsPanelArt(track) {
 function setLyricsPanelOpen(open) {
   lyricsPanelOpen = open;
   document.getElementById('lyricsPanel').classList.toggle('show', open);
-  document.getElementById('lyricsBackdrop').classList.toggle('show', open);
   document.getElementById('nowPlaying').classList.toggle('lyrics-open', open);
   if (open) {
     refreshLyricsPanel();
@@ -3270,7 +3250,6 @@ document.getElementById('nowPlaying').onclick = () => {
   setLyricsPanelOpen(!lyricsPanelOpen);
 };
 document.getElementById('lyricsPanelClose').onclick = () => setLyricsPanelOpen(false);
-document.getElementById('lyricsBackdrop').onclick = () => setLyricsPanelOpen(false);
 
 document.getElementById('spotifyDockClose').onclick = () => {
   spotifyDock.classList.remove('show');
