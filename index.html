@@ -411,8 +411,29 @@
     position: fixed; inset: 0;
     background: rgba(5,6,8,0.92);
     backdrop-filter: blur(10px);
-    display: flex; align-items: center; justify-content: center;
+    display: none; align-items: center; justify-content: center;
     z-index: 100;
+  }
+  #loadingScreen {
+    position: fixed; inset: 0;
+    background: #050608;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px;
+    z-index: 200;
+  }
+  #loadingScreen .logo { font-size: 20px; }
+  #loadingScreen .loading-sub { color: var(--text-dim); font-size: 13px; }
+  #loadingScreen .loading-dots { display: flex; gap: 6px; }
+  #loadingScreen .loading-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent);
+    animation: loadingPulse 1.1s ease-in-out infinite;
+  }
+  #loadingScreen .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  #loadingScreen .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes loadingPulse {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
   }
   .auth-card {
     background: rgba(18,20,24,.92);
@@ -805,6 +826,12 @@
 </style>
 </head>
 <body>
+
+<div id="loadingScreen">
+  <div class="logo"><span class="disc"></span>Streamplay</div>
+  <div class="loading-sub">Loading your library...</div>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+</div>
 
 <div class="bg-orbs" aria-hidden="true">
   <div class="orb orb-1"></div>
@@ -1744,16 +1771,22 @@ async function renderFriendsTab() {
     settingsBody.innerHTML = `
       <p class="empty-state">Friends need one extra table in your Supabase project. Run this once in the SQL editor, then reopen this tab:</p>
       <pre style="background:var(--bg-card); padding:12px; border-radius:8px; font-size:11px; overflow-x:auto; white-space:pre-wrap;">create table friends (
-  requester_id uuid references auth.users(id),
-  addressee_id uuid references auth.users(id),
-  status text default 'pending',
-  created_at timestamptz default now(),
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  addressee_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending','accepted','blocked','declined')),
+  created_at timestamptz not null default now(),
+  check (requester_id &lt;&gt; addressee_id),
   primary key (requester_id, addressee_id)
+);
+create unique index friends_unique_pair on friends (
+  least(requester_id, addressee_id),
+  greatest(requester_id, addressee_id)
 );
 alter table friends enable row level security;
 create policy "read own" on friends for select using (auth.uid() = requester_id or auth.uid() = addressee_id);
 create policy "insert own" on friends for insert with check (auth.uid() = requester_id);
-create policy "update own" on friends for update using (auth.uid() = addressee_id);
+create policy "update own" on friends for update using (auth.uid() = addressee_id) with check (auth.uid() = addressee_id);
 create policy "delete own" on friends for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);</pre>
       <p class="empty-state" style="color:var(--danger);">(${escapeHtml(err.message || 'Table not found')})</p>
     `;
@@ -1784,7 +1817,9 @@ async function searchFriends() {
     btn.onclick = async () => {
       btn.disabled = true; btn.textContent = 'Sending...';
       const { error: e } = await supabaseClient.from('friends').insert({ requester_id: currentUser.id, addressee_id: btn.dataset.id, status: 'pending' });
-      btn.textContent = e ? (e.message || 'Failed') : 'Request sent';
+      // Postgres error code 23505 = unique_violation — happens if a request between
+      // these two people (in either direction) already exists.
+      btn.textContent = e ? (e.code === '23505' ? 'Already friends or pending' : (e.message || 'Failed')) : 'Request sent';
     };
   });
 }
@@ -3786,7 +3821,12 @@ setInterval(() => { if (playing && current) trackEvent('listen_15s', current); }
 
 let appStarted = false;
 
+let startAppPromise = null;
 async function startApp(user) {
+  // onAuthStateChange's INITIAL_SESSION event and the initial getSession()
+  // check can both fire for the same session — only run the startup work once.
+  if (startAppPromise) return startAppPromise;
+  startAppPromise = (async () => {
   currentUser = user;
   appSettings = loadSettings();
 
@@ -3832,13 +3872,36 @@ async function startApp(user) {
     maybeShowGenreOnboarding(() => { appStarted = true; renderView(); });
   }
   else if (currentView === 'admin') { renderView(); } // refresh admin data if already viewing it
+  })();
+  return startAppPromise;
 }
 
 /* On page load, check for an existing Supabase session (also handles the
-   redirect back from Google OAuth, which onAuthStateChange picks up too). */
-supabaseClient.auth.getSession().then(({ data: { session } }) => {
-  if (session && session.user) startApp(session.user);
-});
+   redirect back from Google OAuth, which onAuthStateChange picks up too).
+   The loading screen stays up the whole time, so there's no flash of the
+   login screen before Supabase finishes restoring a session. */
+(async () => {
+  const loadingScreen = document.getElementById('loadingScreen');
+  try {
+    // Race the session check against a timeout so a slow/unreachable
+    // network can't leave someone stuck on the loading screen forever.
+    const { data: { session } } = await Promise.race([
+      supabaseClient.auth.getSession(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+    ]);
+    if (session && session.user) {
+      await startApp(session.user);
+    } else {
+      authOverlay.style.display = 'flex';
+    }
+  } catch (err) {
+    // Couldn't confirm a session in time — fall back to the login screen
+    // rather than leaving the app stuck behind the loading splash.
+    authOverlay.style.display = 'flex';
+  } finally {
+    if (loadingScreen) loadingScreen.style.display = 'none';
+  }
+})();
 </script>
 </body>
 </html>
