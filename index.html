@@ -1425,6 +1425,14 @@ function renderSettingsTab(tab) {
 
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 0 10px; margin-top:6px; border-top:1px solid var(--border);">
         <div>
+          <p class="card-title" style="margin:0 0 4px;">Auto-skip dead air</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">Automatically skips past silent/instrumental lead-in on Apple Music &amp; Jamendo tracks so playback starts right where the sound actually begins. (Not possible on YouTube/Spotify — same cross-origin limitation as AI Enhance.)</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="autoSkipIntroToggle" ${appSettings.autoSkipIntro !== false ? 'checked' : ''}><span class="slider"></span></label>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 0 10px; margin-top:6px; border-top:1px solid var(--border);">
+        <div>
           <p class="card-title" style="margin:0 0 4px;">Autoplay</p>
           <p class="card-sub" style="margin:0;">When a song ends, automatically play something else — pulled from AI recommendations based on your recent listening.</p>
         </div>
@@ -1445,6 +1453,10 @@ function renderSettingsTab(tab) {
       saveSettings(appSettings);
       document.getElementById('enhanceLevelDesc').textContent = lvl.desc;
       applyEnhanceState();
+    };
+    document.getElementById('autoSkipIntroToggle').onchange = (e) => {
+      appSettings.autoSkipIntro = e.target.checked;
+      saveSettings(appSettings);
     };
     document.getElementById('autoplayToggle').onchange = (e) => {
       appSettings.autoplay = e.target.checked;
@@ -1491,8 +1503,8 @@ function settingsKey() { return 'streamplay_settings_' + (currentUser ? currentU
 function loadSettings() {
   // AI enhancement is ON by default — no manual setup required. The
   // settings toggle exists only for people who want to turn it OFF.
-  try { return Object.assign({ aiEnhance: true, autoplay: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }, JSON.parse(localStorage.getItem(settingsKey()))); }
-  catch (e) { return { aiEnhance: true, autoplay: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }; }
+  try { return Object.assign({ aiEnhance: true, autoplay: true, autoSkipIntro: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }, JSON.parse(localStorage.getItem(settingsKey()))); }
+  catch (e) { return { aiEnhance: true, autoplay: true, autoSkipIntro: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }; }
 }
 function saveSettings(s) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
 let appSettings = loadSettings();
@@ -3192,12 +3204,23 @@ function parseLRC(lrcText) {
   return lines.sort((a, b) => a.time - b.time);
 }
 
-function estimateSyncedLines(plainText, durationSec) {
+function estimateSyncedLines(plainText, durationSec, introOffsetSec) {
   const lines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
   if (!lines.length) return [];
-  const dur = durationSec && durationSec > 0 ? durationSec : lines.length * 3.5;
-  const step = dur / lines.length;
-  return lines.map((text, i) => ({ time: i * step, text }));
+  const intro = Math.max(0, introOffsetSec || 0);
+  const singingDuration = durationSec && durationSec > intro ? durationSec - intro : lines.length * 3.5;
+  // Weight each line's share of the runtime by its character length —
+  // longer lines generally take longer to sing than short ones — instead
+  // of splitting the runtime evenly across lines, which was the main
+  // source of visible drift on this (non-LRC) estimated path.
+  const weights = lines.map(l => Math.max(8, l.length));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let t = intro;
+  return lines.map((text, i) => {
+    const time = t;
+    t += (weights[i] / totalWeight) * singingDuration;
+    return { time, text };
+  });
 }
 
 async function fetchSyncedLyricsOnce(artist, title) {
@@ -3318,7 +3341,7 @@ function refreshEstimatedLyricsSync() {
   if (!currentLyricsRaw || lyricsSyncSource !== 'estimated' || !lyricsPanelOpen) return;
   const dur = getTrackDurationSec();
   if (!dur || dur < 10) return;
-  const estimated = estimateSyncedLines(currentLyricsRaw, dur);
+  const estimated = estimateSyncedLines(currentLyricsRaw, dur, getKnownIntroOffset());
   renderLyricsText(currentLyricsRaw, {
     syncedLines: estimated,
     syncSource: 'estimated',
@@ -3543,7 +3566,7 @@ async function refreshLyricsPanel() {
     }
     if (plain) {
       const dur = getTrackDurationSec() || current.duration || 0;
-      const estimated = estimateSyncedLines(plain, dur);
+      const estimated = estimateSyncedLines(plain, dur, getKnownIntroOffset());
       renderLyricsText(plain, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
       return;
     }
@@ -3555,7 +3578,7 @@ async function refreshLyricsPanel() {
     currentLyricsRaw = lyrics;
     currentLyricsIsAI = false;
     const dur = getTrackDurationSec() || current.duration || 0;
-    const estimated = estimateSyncedLines(lyrics, dur);
+    const estimated = estimateSyncedLines(lyrics, dur, getKnownIntroOffset());
     renderLyricsText(lyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
     return;
   }
@@ -3588,7 +3611,7 @@ async function refreshLyricsPanel() {
         currentLyricsRaw = aiLyrics;
         currentLyricsIsAI = true;
         const dur = getTrackDurationSec() || current.duration || 0;
-        const estimated = estimateSyncedLines(aiLyrics, dur);
+        const estimated = estimateSyncedLines(aiLyrics, dur, getKnownIntroOffset());
         renderLyricsText(aiLyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: true });
       } else {
         aiGenBtn.disabled = false;
@@ -3926,6 +3949,11 @@ function mountSpotify(trackId) {
   });
 }
 
+appleAudio.addEventListener('loadedmetadata', () => {
+  if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
+  if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
+  refreshEstimatedLyricsSync();
+});
 appleAudio.addEventListener('timeupdate', () => {
   if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
   curTimeEl.textContent = formatTime(appleAudio.currentTime);
@@ -3965,6 +3993,72 @@ function stopAllPlayback() {
   if (spotifyController) { try { spotifyController.pause(); } catch(e){} }
   appleAudio.pause();
   spotifyDock.classList.remove('show');
+}
+
+/* ---- Auto-skip leading dead air (Apple/Jamendo only) ----
+   Only possible for Apple/Jamendo because we can fetch and decode their
+   audio directly. YouTube/Spotify audio comes through a cross-origin
+   iframe player, so there's no raw PCM to analyze — same fundamental
+   limitation as the AI Enhance/Spatial Audio DSP chain. */
+const introSilenceCache = new Map(); // track id -> seconds of leading silence (0 if none/unknown)
+
+function getKnownIntroOffset() {
+  if (!current) return 0;
+  return introSilenceCache.get(current.id) || 0;
+}
+
+/* Fetches just enough of the file (~first 20s at typical bitrates) to
+   decode and measure, rather than downloading the whole track. Fails
+   safe: any error (CORS, decode failure, no Range support) just resolves
+   to 0 seconds of silence, so playback is never blocked or broken by this. */
+async function detectLeadingSilence(url, trackId) {
+  if (introSilenceCache.has(trackId)) return introSilenceCache.get(trackId);
+  try {
+    const res = await fetch(url, { headers: { Range: 'bytes=0-900000' } });
+    if (!res.ok && res.status !== 206) { introSilenceCache.set(trackId, 0); return 0; }
+    const arrayBuffer = await res.arrayBuffer();
+    const decodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await new Promise((resolve, reject) => {
+      // Safari still wants the callback form; modern browsers also
+      // resolve the returned promise, so this covers both.
+      const maybePromise = decodeCtx.decodeAudioData(arrayBuffer, resolve, reject);
+      if (maybePromise && maybePromise.then) maybePromise.then(resolve, reject);
+    });
+    const data = audioBuffer.getChannelData(0);
+    const rate = audioBuffer.sampleRate;
+    const windowSize = Math.floor(rate * 0.05); // 50ms windows
+    const maxWindows = Math.min(Math.floor(data.length / windowSize), Math.floor(12 / 0.05)); // cap search at 12s
+    const threshold = 0.02; // RMS amplitude — quiet room tone/silence sits well below this
+    let offsetSec = 0;
+    for (let w = 0; w < maxWindows; w++) {
+      let sumSq = 0;
+      const start = w * windowSize;
+      for (let i = start; i < start + windowSize; i++) sumSq += data[i] * data[i];
+      const rms = Math.sqrt(sumSq / windowSize);
+      if (rms > threshold) { offsetSec = start / rate; break; }
+    }
+    decodeCtx.close();
+    // Ignore trivially short offsets — not worth a seek/toast for <1.2s.
+    const result = offsetSec > 1.2 ? Math.round(offsetSec * 10) / 10 : 0;
+    introSilenceCache.set(trackId, result);
+    return result;
+  } catch (e) {
+    console.warn('[Intro skip] detection failed (falling back to no skip):', e.message);
+    introSilenceCache.set(trackId, 0);
+    return 0;
+  }
+}
+
+function maybeAutoSkipIntro(t, url) {
+  if (appSettings.autoSkipIntro === false) return;
+  detectLeadingSilence(url, t.id).then(offset => {
+    if (!current || current.id !== t.id) return; // moved on before analysis finished
+    if (offset > 0 && appleAudio.currentTime < offset) {
+      appleAudio.currentTime = offset;
+      showToast(`Skipped ${offset.toFixed(1)}s of dead air at the start`, 2200);
+      refreshEstimatedLyricsSync(); // account for the new known offset if lyrics are open
+    }
+  });
 }
 
 function playTrack(t, opts) {
@@ -4024,11 +4118,13 @@ function playTrack(t, opts) {
   } else if (t.source === 'apple' || t.source === 'jamendo') {
     ensureAudioGraph();
     const dl = loadDownloads()[t.id];
-    appleAudio.src = dl ? dl.dataUrl : t.previewUrl;
+    const srcUrl = dl ? dl.dataUrl : t.previewUrl;
+    appleAudio.src = srcUrl;
     appleAudio.currentTime = 0;
     appleAudio.play();
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073;';
+    if (!dl) maybeAutoSkipIntro(t, srcUrl); // downloaded data: URLs are local — nothing to Range-fetch
   }
 }
 
