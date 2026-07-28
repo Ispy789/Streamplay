@@ -30,7 +30,8 @@
     --text-dim: var(--text2);
     --danger: #d9705f;
   }
-  * { box-sizing: border-box; scroll-behavior: smooth; }
+  * { box-sizing: border-box; }
+  .lyrics-panel-body { scroll-behavior: smooth; }
   body {
     margin: 0;
     font-family: Inter, 'SF Pro Display', 'Segoe UI', sans-serif;
@@ -489,18 +490,12 @@
   }
   .audio-visualizer.show { opacity: 1; }
 
-  @media (max-width: 900px) {
-    .lyrics-panel { inset: 0; border-radius: 0; }
-    .lyrics-line { font-size: 22px; }
-    .lyrics-line.past, .lyrics-line.upcoming { font-size: 18px; }
-  }
-
   .lyrics-panel {
     position: fixed;
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(480px, 100vw);
+    width: min(440px, 92vw);
     background: rgba(10,11,14,.92);
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
@@ -516,10 +511,6 @@
     overflow: hidden;
   }
   .lyrics-panel.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
-  @media (max-width: 900px) {
-    .lyrics-panel { transform: translateY(100%); }
-    .lyrics-panel.show { transform: translateY(0); }
-  }
   .lyrics-panel-head {
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 22px 28px 16px;
@@ -574,6 +565,32 @@
     text-shadow: 0 0 40px rgba(233,196,106,.25);
   }
   .lyrics-line.upcoming { color: rgba(255,255,255,.35); }
+
+  /* Smaller laptops / tablets: widen the drawer instead of leaving it a
+     narrow sliver. Placed after the base rules above so it actually wins
+     the cascade at these widths. */
+  @media (max-width: 1200px) and (min-width: 681px) {
+    .lyrics-panel { width: min(70vw, 560px); }
+  }
+
+  /* Phones: true fullscreen, sliding up from the bottom, with tighter
+     padding/type so it doesn't dwarf a small screen. */
+  @media (max-width: 680px) {
+    .lyrics-panel {
+      width: 100vw;
+      border-left: none;
+      transform: translateY(100%);
+    }
+    .lyrics-panel.show { transform: translateY(0); }
+    .lyrics-panel-head { padding: 14px 18px 10px; }
+    .lyrics-panel-title { font-size: 17px; }
+    .lyrics-panel-sub { font-size: 12px; }
+    .lyrics-panel-close { width: 30px; height: 30px; font-size: 16px; }
+    .lyrics-panel-body { padding: 14px 18px 36px; }
+    .lyrics-sync-view { gap: 12px; padding: 12px 0 80px; }
+    .lyrics-line { font-size: 18px; }
+    .lyrics-line.active { font-size: 19px; }
+  }
   .lyrics-plain-text { font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-line; }
   .lyrics-sync-badge {
     display: inline-flex;
@@ -2480,17 +2497,11 @@ function parseYoutubeDuration(iso) {
 }
 
 async function runYoutubeSearch(q) {
-  console.log('[YT DEBUG] runYoutubeSearch() called with query:', JSON.stringify(q));
-
   const myToken = ++ytSearchToken;
   const statusEl = document.getElementById('ytSearchStatus');
   const gridEl = document.getElementById('ytSearchResults');
-  if (!statusEl || !gridEl) {
-    console.log('[YT DEBUG] STOP: #ytSearchStatus or #ytSearchResults not found in DOM. statusEl=', statusEl, 'gridEl=', gridEl);
-    return;
-  }
+  if (!statusEl || !gridEl) return;
   if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') {
-    console.log('[YT DEBUG] STOP: YOUTUBE_API_KEY is missing/placeholder. Value:', YOUTUBE_API_KEY);
     statusEl.className = 'add-status error';
     statusEl.textContent = 'YouTube search isn\'t set up yet — add a YouTube Data API key in the code first.';
     return;
@@ -2499,12 +2510,10 @@ async function runYoutubeSearch(q) {
   // Serve from cache instantly if we've already searched this exact query.
   const cacheKey = q.trim().toLowerCase();
   if (ytSearchCache.has(cacheKey)) {
-    console.log('[YT DEBUG] Cache HIT for query:', cacheKey, '- results:', ytSearchCache.get(cacheKey));
     statusEl.className = 'add-status';
     renderYoutubeResults(ytSearchCache.get(cacheKey), statusEl, gridEl);
     return;
   }
-  console.log('[YT DEBUG] Cache MISS for query:', cacheKey, '- proceeding to fetch.');
 
   statusEl.className = 'add-status'; statusEl.textContent = 'Searching...';
   gridEl.innerHTML = '';
@@ -2514,30 +2523,17 @@ async function runYoutubeSearch(q) {
       maxResults: '25', key: YOUTUBE_API_KEY
     });
     const searchUrl = `https://www.googleapis.com/youtube/v3/search?${params}`;
-    console.log('[YT DEBUG] Request URL:', searchUrl);
-
     const res = await fetch(searchUrl);
-    console.log('[YT DEBUG] Response status:', res.status, res.statusText, '| ok:', res.ok);
-
     const data = await res.json();
-    console.log('[YT DEBUG] Response body:', JSON.stringify(data, null, 2));
 
-    if (myToken !== ytSearchToken) {
-      console.log('[YT DEBUG] STOP: stale search token (a newer keystroke superseded this request). mine=', myToken, 'current=', ytSearchToken);
-      return;
-    }
+    if (myToken !== ytSearchToken) return;
     if (!res.ok) {
-      const code = data.error && data.error.code;
       const message = data.error && data.error.message;
-      const status = data.error && data.error.status;
-      console.log('[YT DEBUG] STOP: Google API returned an error. HTTP status:', res.status, '| error.code:', code, '| error.status:', status, '| error.message:', message);
       throw new Error(message || 'Search failed');
     }
     const items = data.items || [];
-    console.log('[YT DEBUG] Number of results returned:', items.length);
 
     if (items.length === 0) {
-      console.log('[YT DEBUG] STOP: zero results for this query (not an error — API call succeeded).');
       ytSearchCache.set(cacheKey, []);
       statusEl.textContent = 'No matches found.';
       return;
@@ -2551,20 +2547,15 @@ async function runYoutubeSearch(q) {
       const ids = items.map(r => r.id.videoId).join(',');
       const durParams = new URLSearchParams({ part: 'contentDetails', id: ids, key: YOUTUBE_API_KEY });
       const durUrl = `https://www.googleapis.com/youtube/v3/videos?${durParams}`;
-      console.log('[YT DEBUG] Duration request URL:', durUrl);
       const durRes = await fetch(durUrl);
-      console.log('[YT DEBUG] Duration response status:', durRes.status, durRes.statusText, '| ok:', durRes.ok);
       const durData = await durRes.json();
-      console.log('[YT DEBUG] Duration response body:', JSON.stringify(durData, null, 2));
       if (myToken !== ytSearchToken) return;
       if (durRes.ok) {
         (durData.items || []).forEach(v => {
           durationById[v.id] = parseYoutubeDuration(v.contentDetails.duration);
         });
-      } else {
-        console.log('[YT DEBUG] Duration call failed but continuing without durations. error:', durData.error);
       }
-    } catch (e) { console.log('[YT DEBUG] Duration call threw (ignored, non-fatal):', e); }
+    } catch (e) { /* non-fatal — show results without durations */ }
 
     const results = items.map(r => ({
       videoId: r.id.videoId,
@@ -2576,11 +2567,9 @@ async function runYoutubeSearch(q) {
 
     ytSearchCache.set(cacheKey, results);
     statusEl.className = 'add-status';
-    console.log('[YT DEBUG] Calling renderYoutubeResults() with', results.length, 'processed result(s).');
     renderYoutubeResults(results, statusEl, gridEl);
   } catch (err) {
     if (myToken !== ytSearchToken) return;
-    console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
     statusEl.className = 'add-status error';
     statusEl.textContent = 'Search failed: ' + (err.message || 'check your connection.');
   }
@@ -2595,7 +2584,6 @@ function ytResultToTrack(r) {
 }
 
 function renderYoutubeResults(results, statusEl, gridEl) {
-  console.log('[YT DEBUG] renderYoutubeResults() executing with', results.length, 'result(s):', results);
   if (results.length === 0) {
     if (statusEl) statusEl.textContent = 'No matches found.';
     gridEl.innerHTML = '';
@@ -2604,7 +2592,7 @@ function renderYoutubeResults(results, statusEl, gridEl) {
   if (statusEl) statusEl.textContent = '';
   gridEl.innerHTML = results.map((r, i) => `
     <div class="result-card yt-result-card" data-idx="${i}">
-      <img src="${r.thumbnail}" alt="">
+      <img src="${r.thumbnail}" alt="" loading="lazy" decoding="async">
       <p class="result-title">${escapeHtml(r.title)}</p>
       <p class="result-sub">${escapeHtml(r.channel)}${r.duration ? ' &middot; ' + formatTime(r.duration) : ''}</p>
       <div class="result-actions">
