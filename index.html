@@ -1113,6 +1113,96 @@ function decodeHtmlEntities(str) {
 }
 
 /* ============================================================
+   SEARCH CLEANUP — dedup, official-upload ranking, tidy titles.
+   Applied to raw YouTube Data API results before they're shown,
+   so a search for one song doesn't return five near-identical
+   uploads (official / lyrics / HD / live / fan-made, etc).
+   ============================================================ */
+
+// A segment (bracketed group, or a chunk between "|" separators) that
+// consists ENTIRELY of one of these noise phrases gets dropped outright,
+// e.g. "(Official Video)", "| HD |", "Lyrics", "Ft. Someone".
+const NOISE_SEGMENT_RE = /^(official( music)?( video| mv| audio)?|lyrics?( video)?|hd|4k|hq|visualizer|remaster(ed)?|fan\s*made|clip|ft\.?\s.*|feat\.?\s.*)$/i;
+// Noise words/phrases stripped even mid-segment (not the whole segment).
+const NOISE_INLINE_RE = [
+  /\bofficial\s*(music\s*)?(video|mv|audio)?\b/gi,
+  /\blyrics?\s*(video)?\b/gi,
+  /\b(hd|4k|hq)\b/gi,
+  /\bvisualizer\b/gi,
+  /\bremaster(ed)?\b/gi,
+  /\bfan\s*made\b/gi,
+];
+
+function cleanTitle(rawTitle) {
+  let t = rawTitle;
+  // Drop bracketed/parenthesized groups that are pure noise, e.g.
+  // "(Official Video)" or "[HD]" — but keep parens with real content
+  // like "(feat. Drake)" ... actually feat credits are noise too here,
+  // since the channel/artist is shown separately in the UI.
+  t = t.replace(/\(([^)]*)\)/g, (m, inner) => NOISE_SEGMENT_RE.test(inner.trim()) ? ' ' : m);
+  t = t.replace(/\[([^\]]*)\]/g, (m, inner) => NOISE_SEGMENT_RE.test(inner.trim()) ? ' ' : m);
+  // Split on "|" (a common uploader convention: "Title | Official MV | Ft. X")
+  // and drop any segment that's pure noise.
+  if (t.includes('|')) {
+    t = t.split('|').map(seg => seg.trim()).filter(seg => seg && !NOISE_SEGMENT_RE.test(seg)).join(' - ');
+  }
+  // Clean up any noise words still sitting inline in what's left.
+  NOISE_INLINE_RE.forEach(re => { t = t.replace(re, ' '); });
+  t = t.replace(/[\[\](){}]/g, ' ');
+  t = t.replace(/\s{2,}/g, ' ').replace(/^[\s\-|]+|[\s\-|]+$/g, '').trim();
+  return t || rawTitle.trim();
+}
+
+// Channels whose uploads should rank above generic reuploads.
+const OFFICIAL_CHANNEL_HINTS = ['vevo', 'official', ' - topic'];
+const DEMOTING_TITLE_WORDS = ['lyrics', 'lyric video', 'live', 'nightcore', 'sped up', 'slowed', 'reverb', '8d audio', 'cover'];
+
+function scoreYoutubeResult(r) {
+  let score = 0;
+  const channel = (r.channel || '').toLowerCase();
+  const title = (r.title || '').toLowerCase();
+  if (OFFICIAL_CHANNEL_HINTS.some(hint => channel.includes(hint))) score += 60;
+  if (title.includes('official')) score += 20;
+  if (typeof r.viewCount === 'number') {
+    if (r.viewCount > 100000000) score += 30;
+    else if (r.viewCount > 10000000) score += 20;
+    else if (r.viewCount > 1000000) score += 10;
+  }
+  if (r.duration > 60 && r.duration < 900) score += 5; // plausible song-length duration
+  DEMOTING_TITLE_WORDS.forEach(w => { if (title.includes(w)) score -= 25; });
+  return score;
+}
+
+// Normalizes the cleaned title alone into a dedup key — deliberately NOT
+// including the channel, since duplicate uploads of the same song almost
+// always come from *different* channels (official / VEVO / random reupload
+// / lyrics channel), which is exactly what needs collapsing together.
+function dedupKey(cleanedTitle) {
+  return cleanedTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Groups raw API results into { primary, otherVersions[] } per song,
+// keeping whichever version scores highest as the primary pick.
+function dedupeAndRankResults(rawResults) {
+  const groups = new Map();
+  rawResults.forEach(r => {
+    const cleaned = cleanTitle(r.title);
+    const score = scoreYoutubeResult(r);
+    const key = dedupKey(cleaned);
+    const entry = { ...r, cleanedTitle: cleaned, score };
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, { primary: entry, otherVersions: [] });
+    } else if (score > existing.primary.score) {
+      groups.set(key, { primary: entry, otherVersions: [existing.primary, ...existing.otherVersions] });
+    } else {
+      existing.otherVersions.push(entry);
+    }
+  });
+  return Array.from(groups.values()).sort((a, b) => b.primary.score - a.primary.score);
+}
+
+/* ============================================================
    SUPABASE CONFIG — fill in SUPABASE_URL below.
    Find it in: Supabase Dashboard -> Project Settings -> API -> Project URL
    The anon/publishable key below is safe to expose in client code.
@@ -2803,31 +2893,41 @@ async function runYoutubeSearch(q) {
       return;
     }
 
-    // The search endpoint doesn't return durations, so fetch them in a
-    // second call. If that call fails, still show the results — just
-    // without a duration — rather than breaking the whole search.
-    let durationById = {};
+    // The search endpoint doesn't return durations or view counts, so
+    // fetch them in a second call. If that call fails, still show the
+    // results — just without ranking signals — rather than breaking
+    // the whole search.
+    let detailsById = {};
     try {
       const ids = items.map(r => r.id.videoId).join(',');
-      const durParams = new URLSearchParams({ part: 'contentDetails', id: ids, key: YOUTUBE_API_KEY });
+      const durParams = new URLSearchParams({ part: 'contentDetails,statistics', id: ids, key: YOUTUBE_API_KEY });
       const durUrl = `https://www.googleapis.com/youtube/v3/videos?${durParams}`;
       const durRes = await fetch(durUrl);
       const durData = await durRes.json();
       if (myToken !== ytSearchToken) return;
       if (durRes.ok) {
         (durData.items || []).forEach(v => {
-          durationById[v.id] = parseYoutubeDuration(v.contentDetails.duration);
+          detailsById[v.id] = {
+            duration: parseYoutubeDuration(v.contentDetails.duration),
+            viewCount: v.statistics ? parseInt(v.statistics.viewCount, 10) || 0 : 0
+          };
         });
       }
-    } catch (e) { /* non-fatal — show results without durations */ }
+    } catch (e) { /* non-fatal — show results without duration/views */ }
 
-    const results = items.map(r => ({
+    const rawResults = items.map(r => ({
       videoId: r.id.videoId,
       title: decodeHtmlEntities(r.snippet.title),
       channel: decodeHtmlEntities(r.snippet.channelTitle),
       thumbnail: r.snippet.thumbnails.medium.url,
-      duration: durationById[r.id.videoId] || 0
+      duration: (detailsById[r.id.videoId] || {}).duration || 0,
+      viewCount: (detailsById[r.id.videoId] || {}).viewCount || 0
     }));
+
+    // Collapse duplicate uploads of the same song into one card (highest-
+    // ranked version shown, the rest tucked under "More versions"), and
+    // clean up noisy titles like "(Official Video) [HD]".
+    const results = dedupeAndRankResults(rawResults);
 
     ytSearchCache.set(cacheKey, results);
     statusEl.className = 'add-status';
@@ -2842,11 +2942,14 @@ async function runYoutubeSearch(q) {
 function ytResultToTrack(r) {
   return {
     id: 'yt_' + r.videoId, source: 'youtube', videoId: r.videoId,
-    name: r.title, artist: r.channel, album: '',
+    name: r.cleanedTitle || r.title, artist: r.channel, album: '',
     duration: r.duration, thumbnail: r.thumbnail
   };
 }
 
+// `results` here is an array of { primary, otherVersions[] } groups from
+// dedupeAndRankResults — one card per distinct song, with any other
+// uploads of the same song collapsed underneath a "More versions" toggle.
 function renderYoutubeResults(results, statusEl, gridEl) {
   if (results.length === 0) {
     if (statusEl) statusEl.textContent = 'No matches found.';
@@ -2854,23 +2957,31 @@ function renderYoutubeResults(results, statusEl, gridEl) {
     return;
   }
   if (statusEl) statusEl.textContent = '';
-  gridEl.innerHTML = results.map((r, i) => `
+  gridEl.innerHTML = results.map((group, i) => {
+    const r = group.primary;
+    const moreCount = group.otherVersions.length;
+    return `
     <div class="result-card yt-result-card" data-idx="${i}">
       <img src="${r.thumbnail}" alt="" loading="lazy" decoding="async">
-      <p class="result-title">${escapeHtml(r.title)}</p>
+      <p class="result-title">${escapeHtml(r.cleanedTitle)}</p>
       <p class="result-sub">${escapeHtml(r.channel)}${r.duration ? ' &middot; ' + formatTime(r.duration) : ''}</p>
       <div class="result-actions">
         <button class="result-add yt-play-btn" data-idx="${i}">&#9654; Play</button>
         <button class="result-add yt-add-btn" data-idx="${i}">+ Add</button>
       </div>
+      ${moreCount ? `
+      <div class="more-versions-toggle" data-idx="${i}" style="font-size:12px; color:var(--text-dim); cursor:pointer; margin-top:6px;">More versions (${moreCount})</div>
+      <div class="more-versions-list" data-idx="${i}" style="display:none; margin-top:6px;"></div>
+      ` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // Clicking anywhere on the card plays it immediately via the existing
   // YouTube player system (same path as clicking Play).
   gridEl.querySelectorAll('.yt-result-card').forEach(card => {
     card.addEventListener('click', () => {
-      const r = results[parseInt(card.dataset.idx, 10)];
+      const r = results[parseInt(card.dataset.idx, 10)].primary;
       const track = ytResultToTrack(r);
       addToLibrary(track);
       playTrack(track);
@@ -2879,7 +2990,7 @@ function renderYoutubeResults(results, statusEl, gridEl) {
   gridEl.querySelectorAll('.yt-play-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const r = results[parseInt(btn.dataset.idx, 10)];
+      const r = results[parseInt(btn.dataset.idx, 10)].primary;
       const track = ytResultToTrack(r);
       addToLibrary(track);
       playTrack(track);
@@ -2888,10 +2999,41 @@ function renderYoutubeResults(results, statusEl, gridEl) {
   gridEl.querySelectorAll('.yt-add-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const r = results[parseInt(btn.dataset.idx, 10)];
+      const r = results[parseInt(btn.dataset.idx, 10)].primary;
       addToLibrary(ytResultToTrack(r));
       btn.textContent = 'Added \u2713';
       btn.disabled = true;
+    });
+  });
+  // "More versions" reveals the collapsed duplicate uploads (e.g. Lyrics,
+  // HD reupload) so they're still reachable, just not cluttering the
+  // main results by default.
+  gridEl.querySelectorAll('.more-versions-toggle').forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(toggle.dataset.idx, 10);
+      const listEl = gridEl.querySelector(`.more-versions-list[data-idx="${idx}"]`);
+      const group = results[idx];
+      if (listEl.style.display === 'none') {
+        listEl.style.display = 'block';
+        listEl.innerHTML = group.otherVersions.map((v, j) => `
+          <div class="more-version-row" data-idx="${idx}" data-j="${j}" style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; cursor:pointer; font-size:12px; color:var(--text-dim);">
+            <span>${escapeHtml(v.cleanedTitle)} — ${escapeHtml(v.channel)}</span>
+            <span>&#9654;</span>
+          </div>
+        `).join('');
+        listEl.querySelectorAll('.more-version-row').forEach(row => {
+          row.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const v = results[parseInt(row.dataset.idx, 10)].otherVersions[parseInt(row.dataset.j, 10)];
+            const track = ytResultToTrack(v);
+            addToLibrary(track);
+            playTrack(track);
+          });
+        });
+      } else {
+        listEl.style.display = 'none';
+      }
     });
   });
 }
@@ -3851,6 +3993,49 @@ async function resolveAutoplayNext() {
   return next;
 }
 
+/* ============================================================
+   PLAYBACK-GAP REDUCTION — resolveAutoplayNext() above involves
+   real network calls (edge function + a YouTube search per pick),
+   which is exactly what caused the noticeable pause between songs.
+   Instead of waiting for the current track to END before starting
+   that work, we kick it off a few seconds early and cache the
+   result, so by the time playback actually ends there's nothing
+   left to do but call playTrack() immediately.
+   ============================================================ */
+let prefetchedNextTrack = null;
+let prefetchForTrackId = null; // which "current" track this prefetch belongs to
+let prefetchInFlight = false;
+const PREFETCH_LEAD_SECONDS = 12; // start resolving the next track this many seconds before the end
+
+function resetPrefetch() {
+  prefetchedNextTrack = null;
+  prefetchForTrackId = null;
+  prefetchInFlight = false;
+}
+
+// Call periodically while a track is playing (from the YouTube progress
+// poller and the Apple/Jamendo timeupdate handler). No-ops unless we're
+// within PREFETCH_LEAD_SECONDS of the end, autoplay is on, and there's no
+// manual queue (manual queue advances are instant already).
+function maybePrefetchNextTrack(remainingSeconds) {
+  if (!appSettings.autoplay) return;
+  if (manualQueue.length) return;
+  if (!current) return;
+  if (!isFinite(remainingSeconds) || remainingSeconds > PREFETCH_LEAD_SECONDS) return;
+  if (prefetchInFlight) return;
+  if (prefetchedNextTrack && prefetchForTrackId === current.id) return; // already have it
+  prefetchInFlight = true;
+  const forId = current.id;
+  resolveAutoplayNext().then(next => {
+    prefetchInFlight = false;
+    // Ignore a late-arriving result if the user has since skipped to a
+    // different track while this was resolving.
+    if (!current || current.id !== forId) return;
+    prefetchedNextTrack = next || null;
+    prefetchForTrackId = forId;
+  }).catch(() => { prefetchInFlight = false; });
+}
+
 async function handleTrackEnded() {
   if (manualQueue.length) {
     const next = manualQueue.shift();
@@ -3859,7 +4044,13 @@ async function handleTrackEnded() {
     return;
   }
   if (!appSettings.autoplay) return;
-  const next = await resolveAutoplayNext();
+  let next;
+  if (prefetchedNextTrack && prefetchForTrackId === (current ? current.id : null)) {
+    next = prefetchedNextTrack;
+  } else {
+    next = await resolveAutoplayNext();
+  }
+  resetPrefetch();
   if (next) playTrack(next);
 }
 
@@ -3873,7 +4064,13 @@ async function goToNextTrack() {
     playTrack(next);
     return;
   }
-  const next = await resolveAutoplayNext();
+  let next;
+  if (prefetchedNextTrack && prefetchForTrackId === (current ? current.id : null)) {
+    next = prefetchedNextTrack;
+  } else {
+    next = await resolveAutoplayNext();
+  }
+  resetPrefetch();
   if (next) playTrack(next);
 }
 
@@ -3961,6 +4158,7 @@ appleAudio.addEventListener('timeupdate', () => {
   progressFill.style.width = ((appleAudio.currentTime / dur) * 100) + '%';
   if (appleAudio.duration) totalTimeEl.textContent = formatTime(appleAudio.duration);
   if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
+  if (appleAudio.duration) maybePrefetchNextTrack(appleAudio.duration - appleAudio.currentTime);
 });
 appleAudio.addEventListener('ended', () => {
   if (!current || (current.source !== 'apple' && current.source !== 'jamendo')) return;
@@ -3980,6 +4178,7 @@ function startProgressPolling() {
     if (dur) {
       totalTimeEl.textContent = formatTime(dur);
       progressFill.style.width = ((cur / dur) * 100) + '%';
+      maybePrefetchNextTrack(dur - cur);
     }
     if (lyricsPanelOpen && lyricsSyncEnabled) updateLyricsSync();
   }, 250);
@@ -4077,6 +4276,7 @@ function playTrack(t, opts) {
   stopAllPlayback();
   current = t;
   mockElapsed = 0;
+  resetPrefetch();
   trackEvent('play', t);
   pushHistory(t);
   recordTrackPlay(t);
