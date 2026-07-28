@@ -343,14 +343,7 @@
     position: relative;
     min-height: 96px;
   }
-  .now-playing {
-    display: flex; align-items: center; gap: 14px; min-width: 0;
-    cursor: pointer; border-radius: 16px; padding: 6px 10px 6px 6px;
-    margin: -6px 0 -6px -6px; transition: background 0.25s;
-  }
-  .now-playing:hover { background: rgba(255,255,255,.06); }
-  .now-playing:active { background: rgba(255,255,255,.09); }
-  .now-playing.lyrics-open { background: rgba(233,196,106,.08); }
+  .now-playing { display: flex; align-items: center; gap: 14px; min-width: 0; }
   .now-art {
     width: 56px; height: 56px;
     border-radius: 14px;
@@ -480,28 +473,55 @@
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
   .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 
-  .lyrics-backdrop { display: none; }
+  .now-playing {
+    cursor: pointer;
+    border-radius: 14px;
+    transition: background 0.2s ease;
+  }
+  .now-playing:hover { background: rgba(255,255,255,.05); }
+  .now-playing.lyrics-active { background: rgba(233,196,106,.08); }
+
+  @media (max-width: 900px) {
+    .lyrics-panel { inset: 0; border-radius: 0; }
+    .lyrics-line { font-size: 22px; }
+    .lyrics-line.past, .lyrics-line.upcoming { font-size: 18px; }
+  }
 
   .lyrics-panel {
     position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(7,8,9,.96);
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(480px, 100vw);
+    background: rgba(10,11,14,.92);
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
+    border-left: 1px solid rgba(255,255,255,.08);
+    box-shadow: -24px 0 60px rgba(0,0,0,.55);
     display: flex;
     flex-direction: column;
-    transform: translateY(100%);
+    opacity: 0;
+    transform: translateX(100%);
     pointer-events: none;
-    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 0.32s ease, transform 0.32s ease;
     z-index: 90;
     overflow: hidden;
   }
-  .lyrics-panel.show { transform: translateY(0); pointer-events: auto; }
-
+  .lyrics-panel.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+  @media (max-width: 900px) {
+    .lyrics-panel { transform: translateY(100%); }
+    .lyrics-panel.show { transform: translateY(0); }
+  }
+  .lyrics-panel-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 22px 28px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .lyrics-panel-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .lyrics-panel-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
   .lyrics-panel-close {
-    position: absolute; top: 18px; right: 18px;
     background: rgba(255,255,255,.06);
     border: 1px solid rgba(255,255,255,.08);
     color: var(--text2);
@@ -511,90 +531,41 @@
     cursor: pointer;
     line-height: 1;
     transition: 0.2s;
-    z-index: 2;
   }
   .lyrics-panel-close:hover { color: white; background: rgba(255,255,255,.1); }
-
-  .lyrics-panel-header {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 48px 28px 20px;
-    flex-shrink: 0;
-    text-align: center;
-  }
-  .lyrics-cover {
-    width: 180px; height: 180px;
-    border-radius: 20px;
-    background-size: cover; background-position: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,.5);
-    margin-bottom: 20px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 48px;
-  }
-  .lyrics-panel-title {
-    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
-    max-width: 100%; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .lyrics-panel-sub { font-size: 14px; color: var(--text2); margin-top: 6px; }
-  .lyrics-divider {
-    height: 1px; margin: 0 28px 8px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
-    flex-shrink: 0;
-  }
   .lyrics-panel-body {
     flex: 1;
-    padding: 16px 28px 48px;
+    padding: 24px 28px 60px;
     overflow-y: auto;
     overflow-x: hidden;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 94%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%);
   }
   .lyrics-sync-view {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 22px;
-    max-width: 640px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 16px 0 100px;
-    text-align: center;
+    align-items: flex-start;
+    gap: 16px;
+    margin: 0;
+    padding: 24px 0 100px;
   }
   .lyrics-line {
-    font-size: 20px;
-    font-weight: 500;
-    line-height: 1.4;
-    letter-spacing: -0.01em;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
     color: rgba(255,255,255,.35);
-    opacity: 0.35;
-    transition: color 0.4s ease, font-size 0.4s ease, opacity 0.4s ease, font-weight 0.4s ease;
+    transition: color 0.35s ease, transform 0.35s ease, opacity 0.35s ease;
     cursor: pointer;
-    transform-origin: center center;
-    width: 100%;
+    transform-origin: left center;
   }
-  .lyrics-line.past {
-    color: rgba(255,255,255,.45);
-    font-weight: 500;
-    font-size: 20px;
-    opacity: 0.5;
-  }
+  .lyrics-line.past { color: rgba(255,255,255,.2); }
   .lyrics-line.active {
     color: white;
-    font-size: 28px;
-    font-weight: 700;
-    opacity: 1;
+    transform: scale(1.03);
+    text-shadow: 0 0 40px rgba(233,196,106,.25);
   }
-  .lyrics-line.upcoming {
-    color: rgba(255,255,255,.35);
-    font-weight: 500;
-    font-size: 20px;
-    opacity: 0.35;
-  }
-
-  @media (max-width: 640px) {
-    .lyrics-cover { width: 140px; height: 140px; }
-    .lyrics-line.active { font-size: 26px; }
-  }
+  .lyrics-line.upcoming { color: rgba(255,255,255,.35); }
   .lyrics-plain-text { font-size: 15px; line-height: 1.9; color: var(--text); white-space: pre-line; }
   .lyrics-sync-badge {
     display: inline-flex;
@@ -799,19 +770,48 @@
   <div class="main">
     <div id="partyBanner"></div>
     <div class="topbar">
-      <input class="search" id="searchInput" placeholder="Search songs, artists, or albums..." style="width:100%;">
+      <input class="search" id="searchInput" placeholder="Search songs, artists, albums..." style="width:100%;">
     </div>
     <div id="mainContent"></div>
   </div>
 
   <div class="player">
-    <div class="now-playing" id="nowPlaying" title="Tap for lyrics">
+    <div class="now-playing" id="nowPlaying" title="Show lyrics">
       <div class="now-art" id="nowArt"></div>
       <div class="now-info">
         <div class="now-title" id="nowTitle">Nothing playing</div>
         <div class="now-artist" id="nowArtist">Pick a track to start</div>
       </div>
       <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
+      <span id="spatialBadge" class="quality-badge" style="display:none;"></span>
+    </div>
+    <div id="lyricsPanel" class="lyrics-panel">
+      <div class="lyrics-panel-head">
+        <div>
+          <div class="lyrics-panel-title" id="lyricsPanelTitle">Lyrics</div>
+          <div class="lyrics-panel-sub" id="lyricsPanelSub"></div>
+        </div>
+        <button id="lyricsPanelClose" class="lyrics-panel-close" title="Close">&times;</button>
+      </div>
+      <div class="lyrics-toolbar" id="lyricsToolbar">
+        <select id="lyricsLangSelect" class="lyrics-lang-select">
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="it">Italian</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="zh">Chinese</option>
+          <option value="ar">Arabic</option>
+          <option value="hi">Hindi</option>
+          <option value="id">Indonesian</option>
+          <option value="ru">Russian</option>
+        </select>
+        <button id="lyricsTranslateBtn" class="lyrics-mini-btn" title="AI-translate these lyrics">&#127760; Translate</button>
+        <button id="lyricsShowOriginalBtn" class="lyrics-mini-btn" style="display:none;">&#8617; Original</button>
+      </div>
+      <div class="lyrics-panel-body" id="lyricsPanelBody"></div>
     </div>
     <div class="controls">
       <div class="buttons">
@@ -839,36 +839,6 @@
     </div>
   </div>
 
-</div>
-
-<div id="lyricsBackdrop" class="lyrics-backdrop"></div>
-<div id="lyricsPanel" class="lyrics-panel">
-  <button id="lyricsPanelClose" class="lyrics-panel-close" title="Close">&times;</button>
-  <div class="lyrics-panel-header">
-    <div class="lyrics-cover" id="lyricsCover">&#9835;</div>
-    <div class="lyrics-panel-title" id="lyricsPanelTitle">Lyrics</div>
-    <div class="lyrics-panel-sub" id="lyricsPanelSub"></div>
-  </div>
-  <div class="lyrics-divider"></div>
-  <div class="lyrics-toolbar" id="lyricsToolbar">
-    <select id="lyricsLangSelect" class="lyrics-lang-select">
-      <option value="es">Spanish</option>
-      <option value="fr">French</option>
-      <option value="de">German</option>
-      <option value="pt">Portuguese</option>
-      <option value="it">Italian</option>
-      <option value="ja">Japanese</option>
-      <option value="ko">Korean</option>
-      <option value="zh">Chinese</option>
-      <option value="ar">Arabic</option>
-      <option value="hi">Hindi</option>
-      <option value="id">Indonesian</option>
-      <option value="ru">Russian</option>
-    </select>
-    <button id="lyricsTranslateBtn" class="lyrics-mini-btn" title="AI-translate these lyrics">&#127760; Translate</button>
-    <button id="lyricsShowOriginalBtn" class="lyrics-mini-btn" style="display:none;">&#8617; Original</button>
-  </div>
-  <div class="lyrics-panel-body" id="lyricsPanelBody"></div>
 </div>
 
 <div id="ytPlayerHolder" style="position:fixed; width:1px; height:1px; overflow:hidden; opacity:0;"></div>
@@ -1199,7 +1169,7 @@ function renderSettingsTab(tab) {
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:10px 0;">
         <div>
           <p class="card-title" style="margin:0 0 4px;">AI Audio Enhance</p>
-          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically — loudness normalization, bass boost, vocal clarity and noise/volume balancing — for Apple/Jamendo tracks. Most of the catalog plays through embedded players, and browsers block outside code from reprocessing that audio, so this can't touch it.</p>
+          <p class="card-sub" style="margin:0; line-height:1.5;">On automatically — loudness normalization, bass boost, vocal clarity and noise/volume balancing — for Apple/Jamendo tracks. YouTube plays through YouTube's own player (which is most of what's in the catalog now), and browsers block outside code from reprocessing that audio, so this can't touch it; we do request YouTube's best available stream quality instead.</p>
         </div>
         <label class="switch"><input type="checkbox" id="aiEnhanceToggle" ${appSettings.aiEnhance ? 'checked' : ''}><span class="slider"></span></label>
       </div>
@@ -1211,7 +1181,22 @@ function renderSettingsTab(tab) {
         </div>
         <p class="card-sub" id="enhanceLevelDesc" style="margin:8px 0 0;">${levels[levelIdx].desc}</p>
       </div>
-      <div class="add-hint">Applies to Apple/Jamendo preview playback — the only sources this app can pipe through the Web Audio API. Other sources play through their own embedded players, so this won't change those.</div>
+      <div class="add-hint">Applies to Apple/Jamendo preview playback — the only sources this app can pipe through the Web Audio API. YouTube and Spotify play through their own embedded players, so this won't change those.</div>
+
+      <div style="padding:16px 0 10px; margin-top:6px; border-top:1px solid var(--border);">
+        <p class="card-title" style="margin:0 0 4px;">Spatial Sound</p>
+        <p class="card-sub" style="margin:0 0 12px; line-height:1.5;">Real-time 3D/surround processing built with the Web Audio API — a wider stereo image, an auto-panning "room" feel, or reverb space, picked per track.</p>
+        <div id="spatialModeChips" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+          ${spatialModes.map(m => `<div class="genre-chip spatial-chip${appSettings.spatialMode === m.id ? ' selected' : ''}" data-mode="${m.id}">${m.label}</div>`).join('')}
+        </div>
+        <div id="spatialIntensityBlock" style="${appSettings.spatialMode === 'off' ? 'opacity:0.4; pointer-events:none;' : ''}">
+          <p class="card-title" style="margin:0 0 8px;">Intensity</p>
+          <input type="range" id="spatialIntensitySlider" min="0" max="100" step="1" value="${Math.round((appSettings.spatialIntensity ?? 0.7) * 100)}" style="width:100%;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+            <span>Subtle</span><span>Immersive</span>
+          </div>
+        </div>
+      </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 0 10px; margin-top:6px; border-top:1px solid var(--border);">
         <div>
@@ -1240,6 +1225,23 @@ function renderSettingsTab(tab) {
       appSettings.autoplay = e.target.checked;
       saveSettings(appSettings);
     };
+    document.querySelectorAll('.spatial-chip').forEach(chip => {
+      chip.onclick = () => {
+        appSettings.spatialMode = chip.dataset.mode;
+        saveSettings(appSettings);
+        document.querySelectorAll('.spatial-chip').forEach(c => c.classList.toggle('selected', c === chip));
+        const block = document.getElementById('spatialIntensityBlock');
+        block.style.opacity = chip.dataset.mode === 'off' ? '0.4' : '1';
+        block.style.pointerEvents = chip.dataset.mode === 'off' ? 'none' : 'auto';
+        ensureAudioGraph();
+        applySpatialState();
+      };
+    });
+    document.getElementById('spatialIntensitySlider').oninput = (e) => {
+      appSettings.spatialIntensity = Number(e.target.value) / 100;
+      saveSettings(appSettings);
+      applySpatialState();
+    };
   } else if (tab === 'friends') {
     renderFriendsTab();
   } else if (tab === 'account') {
@@ -1264,11 +1266,30 @@ function settingsKey() { return 'streamplay_settings_' + (currentUser ? currentU
 function loadSettings() {
   // AI enhancement is ON by default — no manual setup required. The
   // settings toggle exists only for people who want to turn it OFF.
-  try { return Object.assign({ aiEnhance: true, autoplay: true, enhanceLevel: 'high' }, JSON.parse(localStorage.getItem(settingsKey()))); }
-  catch (e) { return { aiEnhance: true, autoplay: true, enhanceLevel: 'high' }; }
+  try { return Object.assign({ aiEnhance: true, autoplay: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }, JSON.parse(localStorage.getItem(settingsKey()))); }
+  catch (e) { return { aiEnhance: true, autoplay: true, enhanceLevel: 'high', spatialMode: 'off', spatialIntensity: 0.7 }; }
 }
 function saveSettings(s) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
 let appSettings = loadSettings();
+
+/* ---- Spatial Sound (surround / 3D) presets — Kugou-style picker.
+   Each preset blends three parallel branches (dry, stereo-widened via a
+   short cross-channel delay, and reverb via a generated impulse
+   response) plus a slow auto-panning LFO for the "surround" feel. */
+const spatialModes = [
+  { id: 'off',      label: 'Off' },
+  { id: 'wide',     label: 'Stereo Widening' },
+  { id: 'surround', label: '3D Surround' },
+  { id: 'hall',     label: 'Concert Hall' },
+  { id: 'studio',   label: 'Studio' },
+];
+const spatialPresets = {
+  off:      { wet: 0,    widen: 0,    widenDelay: 0,     panDepth: 0,    panRate: 0.1,  ir: { dur: 0.4, decay: 3.5 } },
+  wide:     { wet: 0.10, widen: 0.9,  widenDelay: 0.022, panDepth: 0,    panRate: 0.1,  ir: { dur: 0.6, decay: 3.2 } },
+  surround: { wet: 0.32, widen: 0.55, widenDelay: 0.018, panDepth: 0.35, panRate: 0.12, ir: { dur: 1.4, decay: 2.2 } },
+  hall:     { wet: 0.55, widen: 0.25, widenDelay: 0.01,  panDepth: 0.08, panRate: 0.05, ir: { dur: 3.2, decay: 1.8 } },
+  studio:   { wet: 0.16, widen: 0.4,  widenDelay: 0.012, panDepth: 0,    panRate: 0.1,  ir: { dur: 0.5, decay: 3.6 } },
+};
 
 /* ---- AI Audio Enhance DSP chain ----
    loudness normalization + dynamic EQ  -> compressor
@@ -1277,6 +1298,27 @@ let appSettings = loadSettings();
    noise reduction / balance            -> high-shelf + gentle makeup gain
    Applied automatically; nothing for the user to configure. */
 let audioCtx = null, enhanceSource = null, enhanceComp = null, enhanceBass = null, enhancePresence = null, enhanceShelf = null, enhanceGain = null;
+let spatialSplitter = null, spatialMerger = null, spatialDelayL = null, spatialDelayR = null, spatialWidenGain = null,
+    spatialDryGain = null, spatialConvolver = null, spatialReverbGain = null, spatialMixNode = null,
+    spatialPanner = null, spatialPanLFO = null, spatialPanDepth = null;
+const impulseCache = new Map(); // "dur|decay" -> AudioBuffer, so switching modes doesn't regenerate noise every time
+
+function createImpulseResponse(duration, decay) {
+  const key = duration + '|' + decay;
+  if (impulseCache.has(key)) return impulseCache.get(key);
+  const rate = audioCtx.sampleRate;
+  const length = Math.max(1, Math.floor(rate * duration));
+  const impulse = audioCtx.createBuffer(2, length, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = impulse.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    }
+  }
+  impulseCache.set(key, impulse);
+  return impulse;
+}
+
 function ensureAudioGraph() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
   try {
@@ -1291,9 +1333,70 @@ function ensureAudioGraph() {
     enhanceShelf = audioCtx.createBiquadFilter(); // air / de-noise balance
     enhanceShelf.type = 'highshelf'; enhanceShelf.frequency.value = 9000; enhanceShelf.gain.value = 0;
     enhanceGain = audioCtx.createGain(); enhanceGain.gain.value = 1; // volume balancing
-    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain).connect(audioCtx.destination);
+
+    /* ---- Spatial / surround chain ----
+       enhanceGain forks into three branches that remix into spatialMixNode:
+       dry, a Haas-delay stereo widener, and a generated-impulse reverb.
+       spatialMixNode then runs through a panner driven by a slow LFO for
+       the auto-panning "3D surround" feel, before hitting the speakers. */
+    spatialDryGain = audioCtx.createGain();
+    spatialSplitter = audioCtx.createChannelSplitter(2);
+    spatialMerger = audioCtx.createChannelMerger(2);
+    spatialDelayL = audioCtx.createDelay(0.05);
+    spatialDelayR = audioCtx.createDelay(0.05);
+    spatialWidenGain = audioCtx.createGain();
+    spatialConvolver = audioCtx.createConvolver();
+    spatialReverbGain = audioCtx.createGain();
+    spatialMixNode = audioCtx.createGain();
+    spatialPanner = audioCtx.createStereoPanner();
+    spatialPanLFO = audioCtx.createOscillator();
+    spatialPanDepth = audioCtx.createGain();
+
+    enhanceGain.connect(spatialDryGain);
+    enhanceGain.connect(spatialSplitter);
+    enhanceGain.connect(spatialConvolver);
+
+    spatialSplitter.connect(spatialDelayL, 0);
+    spatialSplitter.connect(spatialDelayR, 1);
+    spatialDelayL.connect(spatialMerger, 0, 0);
+    spatialDelayR.connect(spatialMerger, 0, 1);
+    spatialMerger.connect(spatialWidenGain);
+
+    spatialConvolver.connect(spatialReverbGain);
+
+    spatialDryGain.connect(spatialMixNode);
+    spatialWidenGain.connect(spatialMixNode);
+    spatialReverbGain.connect(spatialMixNode);
+
+    spatialPanLFO.type = 'sine'; spatialPanLFO.frequency.value = 0.1;
+    spatialPanDepth.gain.value = 0;
+    spatialPanLFO.connect(spatialPanDepth).connect(spatialPanner.pan);
+    spatialPanLFO.start();
+
+    spatialMixNode.connect(spatialPanner).connect(audioCtx.destination);
+
+    enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain);
     applyEnhanceState();
+    applySpatialState();
   } catch (e) { console.warn('Web Audio graph unavailable:', e.message); }
+}
+
+function applySpatialState() {
+  if (!spatialMixNode) { updateQualityBadge(); return; }
+  const mode = appSettings.spatialMode || 'off';
+  const intensity = appSettings.spatialIntensity ?? 0.7;
+  const preset = spatialPresets[mode] || spatialPresets.off;
+  const t = audioCtx.currentTime;
+  const ramp = (param, value) => param.linearRampToValueAtTime(value, t + 0.25);
+
+  spatialConvolver.buffer = mode === 'off' ? null : createImpulseResponse(preset.ir.dur, preset.ir.decay);
+  ramp(spatialReverbGain.gain, preset.wet * intensity);
+  ramp(spatialWidenGain.gain, preset.widen * intensity);
+  spatialDelayR.delayTime.setTargetAtTime(preset.widenDelay * intensity, t, 0.1);
+  ramp(spatialDryGain.gain, mode === 'off' ? 1 : 1 - (preset.wet * intensity * 0.3));
+  spatialPanLFO.frequency.setTargetAtTime(preset.panRate, t, 0.5);
+  ramp(spatialPanDepth.gain, preset.panDepth * intensity);
+  updateQualityBadge();
 }
 function applyEnhanceState() {
   if (!enhanceShelf) { updateQualityBadge(); return; }
@@ -1321,8 +1424,9 @@ function applyEnhanceState() {
 }
 function updateQualityBadge() {
   const badge = document.getElementById('qualityBadge');
+  const spatialBadgeEl = document.getElementById('spatialBadge');
   if (!badge) return;
-  if (!current) { badge.style.display = 'none'; return; }
+  if (!current) { badge.style.display = 'none'; if (spatialBadgeEl) spatialBadgeEl.style.display = 'none'; return; }
   badge.style.display = '';
   if (current.source === 'apple' || current.source === 'jamendo') {
     if (appSettings.aiEnhance) {
@@ -1333,10 +1437,30 @@ function updateQualityBadge() {
       badge.textContent = 'STANDARD';
       badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
     }
+    if (spatialBadgeEl) {
+      const mode = appSettings.spatialMode || 'off';
+      if (mode === 'off') {
+        spatialBadgeEl.style.display = 'none';
+      } else {
+        const labels = { wide: 'WIDE STEREO', surround: '3D SURROUND', hall: 'CONCERT HALL', studio: 'STUDIO' };
+        spatialBadgeEl.style.display = '';
+        spatialBadgeEl.textContent = labels[mode] || mode.toUpperCase();
+        spatialBadgeEl.title = 'Spatial sound processed in real time via the Web Audio API.';
+        spatialBadgeEl.style.color = 'var(--gold2)'; spatialBadgeEl.style.borderColor = 'var(--gold2)';
+      }
+    }
   } else if (current.source === 'youtube') {
-    badge.style.display = 'none';
+    // Honest, not fake: the Web Audio graph can't reach cross-origin
+    // YouTube iframe audio, so "AI Enhance" genuinely can't touch this —
+    // showing an ENHANCED badge here would be lying. We do still ask
+    // YouTube for its best available stream quality.
+    badge.textContent = 'HD';
+    badge.title = "Playing at the best available streaming quality.";
+    badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
+    if (spatialBadgeEl) spatialBadgeEl.style.display = 'none';
   } else {
     badge.style.display = 'none';
+    if (spatialBadgeEl) spatialBadgeEl.style.display = 'none';
   }
 }
 
@@ -2091,7 +2215,7 @@ function renderHome() {
     const statusEl = document.getElementById('trendingStatus');
     if (!grid) return;
     if (!results.length) {
-      grid.innerHTML = `<p class="empty-state">Couldn't load trending right now — check your connection and try again.</p>`;
+      grid.innerHTML = `<p class="empty-state">Couldn't load trending right now — check your YouTube API key/quota.</p>`;
       return;
     }
     renderYoutubeResults(results, statusEl, grid);
@@ -2170,7 +2294,7 @@ async function fetchAIRecommendations() {
 function renderSearchEmpty() {
   mainContent.innerHTML = `
     <h2 class="section-title">Search</h2>
-    <p class="empty-state">One search, everything at once — your tracks, playlists, history, and the full catalog all show up here together. Tap anything to play it instantly.</p>
+    <p class="empty-state">One search, everything at once — your tracks, playlists, history, and YouTube all show up here together. Tap anything to play it instantly.</p>
   `;
 }
 
@@ -2305,7 +2429,7 @@ async function runYoutubeSearch(q) {
   if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_DATA_API_KEY') {
     console.log('[YT DEBUG] STOP: YOUTUBE_API_KEY is missing/placeholder. Value:', YOUTUBE_API_KEY);
     statusEl.className = 'add-status error';
-    statusEl.textContent = 'Catalog search isn\'t set up yet — add an API key in the code first.';
+    statusEl.textContent = 'YouTube search isn\'t set up yet — add a YouTube Data API key in the code first.';
     return;
   }
 
@@ -2319,7 +2443,7 @@ async function runYoutubeSearch(q) {
   }
   console.log('[YT DEBUG] Cache MISS for query:', cacheKey, '- proceeding to fetch.');
 
-  statusEl.className = 'add-status'; statusEl.textContent = 'Searching catalog...';
+  statusEl.className = 'add-status'; statusEl.textContent = 'Searching...';
   gridEl.innerHTML = '';
   try {
     const params = new URLSearchParams({
@@ -2395,7 +2519,7 @@ async function runYoutubeSearch(q) {
     if (myToken !== ytSearchToken) return;
     console.log('[YT DEBUG] STOP: caught exception in runYoutubeSearch():', err);
     statusEl.className = 'add-status error';
-    statusEl.textContent = 'Search failed: ' + (err.message || 'check your connection and API key.');
+    statusEl.textContent = 'Search failed: ' + (err.message || 'check your connection.');
   }
 }
 
@@ -2583,7 +2707,7 @@ function renderTrackList(container, list, opts) {
   list.forEach((t, i) => {
     const row = document.createElement('div');
     row.className = 'track-row';
-    const sourceLabel = (t.source === 'local' || t.source === 'youtube' || t.source === 'spotify') ? '' : t.source;
+    const sourceLabel = t.source === 'local' ? '' : t.source;
     const liked = likedIds.includes(t.id);
     const canDownload = t.source === 'apple' || t.source === 'jamendo';
     const downloaded = canDownload && isDownloaded(t.id);
@@ -2633,35 +2757,20 @@ const spotifyDock = document.getElementById('spotifyDock');
 const spotifyEmbedFrame = document.getElementById('spotifyEmbedFrame');
 const appleAudio = document.getElementById('applePreviewAudio');
 
-/* ---- Lyrics — Supabase `lyrics` table caches synced lyrics per song.
-   Run once in Supabase SQL editor if the table doesn't exist yet:
-
-   create table lyrics (
-     id uuid primary key default gen_random_uuid(),
-     song_id text unique not null,
-     artist text,
-     title text,
-     lyrics text,
-     synced_lyrics jsonb,
-     created_at timestamptz default now(),
-     updated_at timestamptz default now()
-   );
-   alter table lyrics enable row level security;
-   create policy "read lyrics" on lyrics for select using (true);
-   create policy "upsert lyrics" on lyrics for insert with check (true);
-   create policy "update lyrics" on lyrics for update using (true);
-   ---- */
+/* ---- Lyrics (api.lyrics.ovh — free, no key, CORS-enabled) ----
+   Note for whoever deploys this: lyrics.ovh is a convenience/demo API,
+   not a licensed commercial source. Fine for personal/hobby use; if this
+   app is ever shipped publicly at scale, swap in a licensed lyrics
+   provider (e.g. Musixmatch's official API) instead. */
 const lyricsCache = new Map(); // "artist|||title" -> string | null
 const syncedLyricsCache = new Map(); // "artist|||title" -> { synced, plain } | null
 let lyricsPanelOpen = false;
 let lyricsRequestToken = 0;
 let syncedLyrics = [];       // [{ time, text }]
 let lyricsSyncEnabled = false;
-let lyricsSyncSource = 'none'; // 'lrc' | 'ai' | 'estimated' | 'cached' | 'none'
+let lyricsSyncSource = 'none'; // 'lrc' | 'estimated' | 'none'
 let spotifyPosition = 0;
-let lyricsSyncTimer = null;
-let lastLyricsActiveIdx = -1;
-let lyricsLineEls = [];
+let lyricsSyncRaf = null;
 
 /* ---- AI translate + AI-generated-lyrics state ----
    currentLyricsRaw holds whatever text is currently shown in the panel
@@ -2705,91 +2814,6 @@ function lyricsCandidates(track) {
   // Fall back to the raw, uncleaned fields as a last resort.
   candidates.push({ artist: track.artist, title: track.name });
   return candidates;
-}
-
-function getLyricsSongId(track) {
-  if (track && track.id) return String(track.id);
-  const c = lyricsCandidates(track)[0];
-  return ((c.artist || '') + '::' + (c.title || '')).toLowerCase().replace(/\s+/g, '_');
-}
-
-async function fetchLyricsFromSupabase(track) {
-  try {
-    const songId = getLyricsSongId(track);
-    const { data, error } = await supabaseClient.from('lyrics')
-      .select('*')
-      .eq('song_id', songId)
-      .maybeSingle();
-    if (error) {
-      console.warn('[Lyrics] Supabase fetch failed:', error.message);
-      return null;
-    }
-    return data;
-  } catch (e) {
-    console.warn('[Lyrics] Supabase fetch failed:', e.message);
-    return null;
-  }
-}
-
-async function saveLyricsToSupabase(track, plain, synced) {
-  try {
-    const cleanTitle = cleanForLyrics(track.name);
-    const cleanArtist = cleanForLyrics(track.artist);
-    const row = {
-      song_id: getLyricsSongId(track),
-      artist: cleanArtist || track.artist,
-      title: cleanTitle || track.name,
-      lyrics: plain,
-      synced_lyrics: synced,
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await supabaseClient.from('lyrics').upsert(row, { onConflict: 'song_id' });
-    if (error) console.warn('[Lyrics] Supabase save failed:', error.message);
-  } catch (e) {
-    console.warn('[Lyrics] Supabase save failed:', e.message);
-  }
-}
-
-async function generateAISyncedLyrics(plainLyrics, durationSec) {
-  try {
-    const { data, error } = await supabaseClient.functions.invoke('streamplay-ai', {
-      body: { action: 'lyrics-sync', lyrics: plainLyrics, duration: durationSec }
-    });
-    if (error || !data) return null;
-    const synced = data.synced_lyrics || data.syncedLyrics || data.lines;
-    if (Array.isArray(synced) && synced.length) {
-      return synced.map(l => ({ time: Number(l.time) || 0, text: String(l.text || '').trim() }))
-        .filter(l => l.text);
-    }
-    return null;
-  } catch (e) {
-    console.warn('[Lyrics] AI sync failed:', e.message);
-    return null;
-  }
-}
-
-function updateLyricsPanelArt(track) {
-  const cover = document.getElementById('lyricsCover');
-  if (!cover || !track) return;
-  if (track.thumbnail) {
-    cover.style.background = `center/cover no-repeat url(${track.thumbnail})`;
-    cover.innerHTML = '';
-  } else {
-    cover.style.background = track.color || '#7f9c96';
-    cover.innerHTML = '&#9835;';
-  }
-}
-
-function setLyricsPanelOpen(open) {
-  lyricsPanelOpen = open;
-  document.getElementById('lyricsPanel').classList.toggle('show', open);
-  document.getElementById('nowPlaying').classList.toggle('lyrics-open', open);
-  if (open) {
-    refreshLyricsPanel();
-    startLyricsSyncLoop();
-  } else {
-    stopLyricsSyncLoop();
-  }
 }
 
 async function fetchLyricsOnce(artist, title) {
@@ -2892,43 +2916,39 @@ function getCurrentPlaybackTime() {
 }
 
 function stopLyricsSyncLoop() {
-  if (lyricsSyncTimer) clearInterval(lyricsSyncTimer);
-  lyricsSyncTimer = null;
+  if (lyricsSyncRaf) cancelAnimationFrame(lyricsSyncRaf);
+  lyricsSyncRaf = null;
 }
 
 function startLyricsSyncLoop() {
   stopLyricsSyncLoop();
   if (!lyricsPanelOpen || !lyricsSyncEnabled || !syncedLyrics.length) return;
-  lyricsSyncTimer = setInterval(updateLyricsSync, 50);
+  const tick = () => {
+    updateLyricsSync();
+    if (lyricsPanelOpen && lyricsSyncEnabled) lyricsSyncRaf = requestAnimationFrame(tick);
+  };
+  lyricsSyncRaf = requestAnimationFrame(tick);
 }
 
 function updateLyricsSync() {
-  if (!lyricsSyncEnabled || !syncedLyrics.length || !lyricsLineEls.length) return;
+  if (!lyricsSyncEnabled || !syncedLyrics.length) return;
   const t = getCurrentPlaybackTime();
   let activeIdx = 0;
   for (let i = 0; i < syncedLyrics.length; i++) {
-    if (syncedLyrics[i].time <= t) activeIdx = i;
+    if (syncedLyrics[i].time <= t + 0.05) activeIdx = i;
     else break;
   }
-  if (activeIdx === lastLyricsActiveIdx) return;
-
-  const prevIdx = lastLyricsActiveIdx;
-  if (prevIdx >= 0 && lyricsLineEls[prevIdx]) {
-    lyricsLineEls[prevIdx].classList.remove('active');
-    lyricsLineEls[prevIdx].classList.add('past');
-    lyricsLineEls[prevIdx].classList.remove('upcoming');
+  const lineEls = document.querySelectorAll('.lyrics-line');
+  if (!lineEls.length) return;
+  lineEls.forEach((el, i) => {
+    el.classList.toggle('active', i === activeIdx);
+    el.classList.toggle('past', i < activeIdx);
+    el.classList.toggle('upcoming', i > activeIdx);
+  });
+  const activeEl = lineEls[activeIdx];
+  if (activeEl && playing) {
+    activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
-  const activeEl = lyricsLineEls[activeIdx];
-  if (activeEl) {
-    activeEl.classList.remove('past', 'upcoming');
-    activeEl.classList.add('active');
-    if (playing) activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }
-  for (let i = activeIdx + 1; i < lyricsLineEls.length; i++) {
-    lyricsLineEls[i].classList.remove('active', 'past');
-    lyricsLineEls[i].classList.add('upcoming');
-  }
-  lastLyricsActiveIdx = activeIdx;
 }
 
 function refreshEstimatedLyricsSync() {
@@ -2956,7 +2976,6 @@ function seekToLyricLine(index) {
     const dur = current.duration || 1;
     progressFill.style.width = ((mockElapsed / dur) * 100) + '%';
   }
-  lastLyricsActiveIdx = -1;
   updateLyricsSync();
 }
 
@@ -3020,12 +3039,10 @@ async function generateAILyrics(track) {
   }
 }
 
-/* Renders synced or plain lyrics with Apple Music-style line highlighting. */
+/* Renders synced or plain lyrics with Spotify-style line highlighting. */
 function renderLyricsText(text, opts) {
   opts = opts || {};
   const bodyEl = document.getElementById('lyricsPanelBody');
-  lastLyricsActiveIdx = -1;
-  lyricsLineEls = [];
   const badge = opts.aiGenerated
     ? `<span class="lyrics-ai-badge">&#10024; AI-generated</span><div class="lyrics-ai-disclaimer">This isn't an official lyrics source — it's a best-effort AI approximation and may not match the real song exactly.</div>`
     : '';
@@ -3036,14 +3053,14 @@ function renderLyricsText(text, opts) {
     currentLyricsSyncSource = opts.syncSource || 'estimated';
     lyricsSyncEnabled = true;
     lyricsSyncSource = currentLyricsSyncSource;
-    const syncLabels = { lrc: 'Synced lyrics', ai: 'AI-synced', cached: 'Synced lyrics', estimated: 'Auto-synced' };
-    const syncTag = `<span class="lyrics-sync-badge">&#9679; ${syncLabels[opts.syncSource] || 'Synced'}</span>`;
+    const syncTag = opts.syncSource === 'lrc'
+      ? `<span class="lyrics-sync-badge">&#9679; Synced lyrics</span>`
+      : `<span class="lyrics-sync-badge">&#9679; Auto-synced</span>`;
     bodyEl.innerHTML = badge + syncTag + '<div class="lyrics-sync-view">' +
       syncedLyrics.map((l, i) =>
         `<div class="lyrics-line upcoming" data-index="${i}" data-time="${l.time}">${escapeHtml(l.text)}</div>`
       ).join('') + '</div>';
-    lyricsLineEls = Array.from(bodyEl.querySelectorAll('.lyrics-line'));
-    lyricsLineEls.forEach(el => {
+    bodyEl.querySelectorAll('.lyrics-line').forEach(el => {
       el.onclick = () => seekToLyricLine(parseInt(el.dataset.index, 10));
     });
     startLyricsSyncLoop();
@@ -3131,9 +3148,9 @@ async function refreshLyricsPanel() {
   }
   titleEl.textContent = current.name;
   subEl.textContent = current.artist;
-  updateLyricsPanelArt(current);
   bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Finding lyrics…</div>`;
 
+  // Reset per-track AI state — a new track means old translations/AI text no longer apply.
   currentLyricsRaw = null;
   currentLyricsIsAI = false;
   currentLyricsSyncedLines = null;
@@ -3141,8 +3158,6 @@ async function refreshLyricsPanel() {
   syncedLyrics = [];
   lyricsSyncEnabled = false;
   lyricsSyncSource = 'none';
-  lastLyricsActiveIdx = -1;
-  lyricsLineEls = [];
   stopLyricsSyncLoop();
   translationCache = new Map();
   document.getElementById('lyricsToolbar').classList.remove('show');
@@ -3150,17 +3165,7 @@ async function refreshLyricsPanel() {
 
   const myToken = ++lyricsRequestToken;
 
-  // 1. Supabase cache — show immediately if synced lyrics exist
-  const cached = await fetchLyricsFromSupabase(current);
-  if (myToken !== lyricsRequestToken) return;
-  if (cached && cached.synced_lyrics && cached.synced_lyrics.length) {
-    currentLyricsRaw = cached.lyrics || cached.synced_lyrics.map(l => l.text).join('\n');
-    currentLyricsIsAI = false;
-    renderLyricsText(currentLyricsRaw, { syncedLines: cached.synced_lyrics, syncSource: 'cached', aiGenerated: false });
-    return;
-  }
-
-  // 2. LRCLIB for real synced (LRC) lyrics
+  // Try LRCLIB first for real synced (LRC) lyrics — Spotify-style karaoke.
   const lrcResult = await fetchSyncedLyrics(current);
   if (myToken !== lyricsRequestToken) return;
   if (lrcResult) {
@@ -3168,36 +3173,28 @@ async function refreshLyricsPanel() {
     currentLyricsRaw = plain;
     currentLyricsIsAI = false;
     if (lrcResult.synced && lrcResult.synced.length) {
-      saveLyricsToSupabase(current, plain, lrcResult.synced);
       renderLyricsText(plain, { syncedLines: lrcResult.synced, syncSource: 'lrc', aiGenerated: false });
+      return;
+    }
+    if (plain) {
+      const dur = getTrackDurationSec() || current.duration || 0;
+      const estimated = estimateSyncedLines(plain, dur);
+      renderLyricsText(plain, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
       return;
     }
   }
 
-  // 3. Plain lyrics from API or Supabase cache
-  let plain = cached && cached.lyrics ? cached.lyrics : null;
-  if (!plain) {
-    plain = await fetchLyrics(current);
-    if (myToken !== lyricsRequestToken) return;
-  }
-  if (plain) {
-    currentLyricsRaw = plain;
+  const lyrics = await fetchLyrics(current);
+  if (myToken !== lyricsRequestToken) return;
+  if (lyrics) {
+    currentLyricsRaw = lyrics;
     currentLyricsIsAI = false;
-    bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Syncing lyrics to the beat…</div>`;
     const dur = getTrackDurationSec() || current.duration || 0;
-    let synced = await generateAISyncedLyrics(plain, dur);
-    if (myToken !== lyricsRequestToken) return;
-    let syncSource = 'ai';
-    if (!synced || !synced.length) {
-      synced = estimateSyncedLines(plain, dur);
-      syncSource = 'estimated';
-    }
-    saveLyricsToSupabase(current, plain, synced);
-    renderLyricsText(plain, { syncedLines: synced, syncSource, aiGenerated: false });
+    const estimated = estimateSyncedLines(lyrics, dur);
+    renderLyricsText(lyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: false });
     return;
   }
-
-  // 4. Genius fallback link
+  // No direct lyrics text — try Genius for at least a confirmed match + link.
   const geniusMatch = await fetchGeniusFallback(current);
   if (myToken !== lyricsRequestToken) return;
   if (geniusMatch && geniusMatch.url) {
@@ -3211,7 +3208,7 @@ async function refreshLyricsPanel() {
       </div>`;
   } else {
     bodyEl.innerHTML = `
-      <p class="empty-state" style="margin:0 0 10px;">No lyrics found for this track yet.</p>
+      <p class="empty-state" style="margin:0 0 10px;">No lyrics found for this one — the title/artist tags may be too different from what the lyrics databases have on file.</p>
       <button id="lyricsAiGenBtn" class="lyrics-mini-btn">&#10024; Try AI lyrics instead</button>`;
   }
 
@@ -3220,26 +3217,17 @@ async function refreshLyricsPanel() {
     aiGenBtn.onclick = async () => {
       aiGenBtn.disabled = true;
       aiGenBtn.textContent = 'Asking AI…';
-      bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> AI is writing lyrics…</div>`;
       const aiLyrics = await generateAILyrics(current);
       if (myToken !== lyricsRequestToken) return;
       if (aiLyrics) {
         currentLyricsRaw = aiLyrics;
         currentLyricsIsAI = true;
-        bodyEl.innerHTML = `<div class="lyrics-loading"><span class="lyrics-spinner"></span> Syncing lyrics to the beat…</div>`;
         const dur = getTrackDurationSec() || current.duration || 0;
-        let synced = await generateAISyncedLyrics(aiLyrics, dur);
-        if (myToken !== lyricsRequestToken) return;
-        if (!synced || !synced.length) synced = estimateSyncedLines(aiLyrics, dur);
-        saveLyricsToSupabase(current, aiLyrics, synced);
-        renderLyricsText(aiLyrics, {
-          syncedLines: synced,
-          syncSource: 'ai',
-          aiGenerated: true
-        });
+        const estimated = estimateSyncedLines(aiLyrics, dur);
+        renderLyricsText(aiLyrics, { syncedLines: estimated, syncSource: 'estimated', aiGenerated: true });
       } else {
         aiGenBtn.disabled = false;
-        bodyEl.innerHTML = `<p class="empty-state" style="margin:0;">Couldn't generate AI lyrics — try again in a moment.</p>`;
+        aiGenBtn.textContent = "Couldn't generate AI lyrics — try again";
       }
     };
   }
@@ -3247,9 +3235,23 @@ async function refreshLyricsPanel() {
 
 document.getElementById('nowPlaying').onclick = () => {
   if (!current) return;
-  setLyricsPanelOpen(!lyricsPanelOpen);
+  lyricsPanelOpen = !lyricsPanelOpen;
+  document.getElementById('lyricsPanel').classList.toggle('show', lyricsPanelOpen);
+  document.getElementById('nowPlaying').classList.toggle('lyrics-active', lyricsPanelOpen);
+  if (lyricsPanelOpen) {
+    refreshLyricsPanel();
+    startLyricsSyncLoop();
+  } else {
+    stopLyricsSyncLoop();
+  }
 };
-document.getElementById('lyricsPanelClose').onclick = () => setLyricsPanelOpen(false);
+document.getElementById('lyricsPanelClose').onclick = (e) => {
+  e.stopPropagation();
+  lyricsPanelOpen = false;
+  stopLyricsSyncLoop();
+  document.getElementById('lyricsPanel').classList.remove('show');
+  document.getElementById('nowPlaying').classList.remove('lyrics-active');
+};
 
 document.getElementById('spotifyDockClose').onclick = () => {
   spotifyDock.classList.remove('show');
@@ -3468,10 +3470,7 @@ function playTrack(t, opts) {
   recordTrackPlay(t);
   logListeningEvent(t);
   if (!opts.fromParty) broadcastTrackToParty(t);
-  if (lyricsPanelOpen) {
-    refreshLyricsPanel();
-    updateLyricsPanelArt(t);
-  }
+  if (lyricsPanelOpen) refreshLyricsPanel();
 
   if (t.thumbnail) {
     nowArt.style.background = `center/cover no-repeat url(${t.thumbnail})`;
