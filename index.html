@@ -52,7 +52,7 @@
   .orb {
     position: absolute;
     border-radius: 50%;
-    filter: blur(80px);
+    filter: blur(48px);
     opacity: 0.35;
   }
   .orb-1 {
@@ -76,7 +76,7 @@
   .sidebar {
     margin: 18px 0 18px 18px;
     border-radius: 24px;
-    backdrop-filter: blur(30px);
+    backdrop-filter: blur(18px);
     background: var(--panel);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
@@ -157,7 +157,7 @@
     padding: 24px 32px 32px;
     margin: 18px 18px 0 0;
     border-radius: 24px;
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(14px);
     background: rgba(255,255,255,.02);
     border: 1px solid rgba(255,255,255,.04);
   }
@@ -169,7 +169,7 @@
     padding: 0 22px;
     border-radius: 18px;
     background: rgba(255,255,255,.04);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,.08);
     color: var(--text);
     font-size: 15px;
@@ -205,7 +205,7 @@
   .card {
     border-radius: 24px;
     background: var(--card);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,.08);
     padding: 18px;
     cursor: pointer;
@@ -331,7 +331,7 @@
     grid-column: 1 / -1;
     margin: 0 18px 18px 18px;
     border-radius: 24px;
-    backdrop-filter: blur(30px);
+    backdrop-filter: blur(18px);
     background: rgba(14,15,18,.82);
     border: 1px solid rgba(255,255,255,.08);
     box-shadow: var(--shadow);
@@ -408,13 +408,13 @@
   #authOverlay {
     position: fixed; inset: 0;
     background: rgba(5,6,8,0.92);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(10px);
     display: flex; align-items: center; justify-content: center;
     z-index: 100;
   }
   .auth-card {
     background: rgba(18,20,24,.92);
-    backdrop-filter: blur(30px);
+    backdrop-filter: blur(18px);
     border: 1px solid rgba(255,255,255,.08);
     border-radius: 24px;
     padding: 32px;
@@ -480,6 +480,14 @@
   }
   .now-playing:hover { background: rgba(255,255,255,.05); }
   .now-playing.lyrics-active { background: rgba(233,196,106,.08); }
+  .audio-visualizer {
+    width: 40px;
+    height: 24px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .audio-visualizer.show { opacity: 1; }
 
   @media (max-width: 900px) {
     .lyrics-panel { inset: 0; border-radius: 0; }
@@ -494,8 +502,8 @@
     bottom: 0;
     width: min(480px, 100vw);
     background: rgba(10,11,14,.92);
-    backdrop-filter: blur(50px);
-    -webkit-backdrop-filter: blur(50px);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
     border-left: 1px solid rgba(255,255,255,.08);
     box-shadow: -24px 0 60px rgba(0,0,0,.55);
     display: flex;
@@ -784,6 +792,7 @@
       </div>
       <span id="qualityBadge" class="quality-badge" style="display:none;"></span>
       <span id="spatialBadge" class="quality-badge" style="display:none;"></span>
+      <canvas id="audioVisualizer" class="audio-visualizer" width="40" height="24" title="Live spectrum"></canvas>
     </div>
     <div id="lyricsPanel" class="lyrics-panel">
       <div class="lyrics-panel-head">
@@ -1301,6 +1310,7 @@ let audioCtx = null, enhanceSource = null, enhanceComp = null, enhanceBass = nul
 let spatialSplitter = null, spatialMerger = null, spatialDelayL = null, spatialDelayR = null, spatialWidenGain = null,
     spatialDryGain = null, spatialConvolver = null, spatialReverbGain = null, spatialMixNode = null,
     spatialPanner = null, spatialPanLFO = null, spatialPanDepth = null;
+let visualizerAnalyser = null, visualizerData = null;
 const impulseCache = new Map(); // "dur|decay" -> AudioBuffer, so switching modes doesn't regenerate noise every time
 
 function createImpulseResponse(duration, decay) {
@@ -1374,6 +1384,11 @@ function ensureAudioGraph() {
     spatialPanLFO.start();
 
     spatialMixNode.connect(spatialPanner).connect(audioCtx.destination);
+    visualizerAnalyser = audioCtx.createAnalyser();
+    visualizerAnalyser.fftSize = 64;
+    visualizerAnalyser.smoothingTimeConstant = 0.75;
+    visualizerData = new Uint8Array(visualizerAnalyser.frequencyBinCount);
+    spatialPanner.connect(visualizerAnalyser); // tap only — doesn't need to connect further
 
     enhanceSource.connect(enhanceComp).connect(enhanceBass).connect(enhancePresence).connect(enhanceShelf).connect(enhanceGain);
     applyEnhanceState();
@@ -1463,6 +1478,54 @@ function updateQualityBadge() {
     if (spatialBadgeEl) spatialBadgeEl.style.display = 'none';
   }
 }
+
+/* ---- Live spectrum visualizer (Kugou-style bars next to the now-playing badges) ----
+   Uses real FFT data from the analyser tap for Apple/Jamendo tracks (the only
+   sources the Web Audio API can reach). For YouTube/Spotify, which play
+   through their own cross-origin embeds with no accessible audio data, it
+   falls back to a lightweight animated pattern so the player still feels
+   alive — it's decorative there, not a real analysis. */
+const visualizerColor = '#E9C46A';
+function drawVisualizerFrame(now) {
+  requestAnimationFrame(drawVisualizerFrame);
+  const canvas = document.getElementById('audioVisualizer');
+  if (!canvas) return;
+  const show = !!current && playing;
+  canvas.classList.toggle('show', show);
+  if (!show) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const bars = 5;
+  const gap = 2;
+  const barWidth = (w - gap * (bars - 1)) / bars;
+  let values;
+  if (visualizerAnalyser && (current.source === 'apple' || current.source === 'jamendo')) {
+    visualizerAnalyser.getByteFrequencyData(visualizerData);
+    const bucket = Math.max(1, Math.floor(visualizerData.length / bars));
+    values = [];
+    for (let i = 0; i < bars; i++) {
+      let sum = 0;
+      for (let j = 0; j < bucket; j++) sum += visualizerData[i * bucket + j] || 0;
+      values.push((sum / bucket) / 255);
+    }
+  } else {
+    values = [];
+    for (let i = 0; i < bars; i++) {
+      values.push(0.28 + 0.62 * Math.abs(Math.sin(now / 260 + i * 0.9)));
+    }
+  }
+  ctx.fillStyle = visualizerColor;
+  values.forEach((v, i) => {
+    const barH = Math.max(2, v * h);
+    const x = i * (barWidth + gap);
+    const radius = Math.min(2, barWidth / 2);
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, h - barH, barWidth, barH, radius) : ctx.rect(x, h - barH, barWidth, barH);
+    ctx.fill();
+  });
+}
+requestAnimationFrame(drawVisualizerFrame);
 
 /* ---- Friends (requires a `friends` table in Supabase — see the setup
    SQL shown automatically in the Friends tab if the table doesn't exist
@@ -2915,19 +2978,23 @@ function getCurrentPlaybackTime() {
   return mockElapsed;
 }
 
+let cachedLyricLineEls = null;
+let lastActiveLyricIdx = -1;
+let lyricsSyncTickTimer = null;
+const LYRICS_SYNC_INTERVAL_MS = 120; // ~8 checks/sec — CSS handles the smooth visual transition, so we don't need 60fps polling
+
 function stopLyricsSyncLoop() {
   if (lyricsSyncRaf) cancelAnimationFrame(lyricsSyncRaf);
   lyricsSyncRaf = null;
+  if (lyricsSyncTickTimer) clearInterval(lyricsSyncTickTimer);
+  lyricsSyncTickTimer = null;
 }
 
 function startLyricsSyncLoop() {
   stopLyricsSyncLoop();
   if (!lyricsPanelOpen || !lyricsSyncEnabled || !syncedLyrics.length) return;
-  const tick = () => {
-    updateLyricsSync();
-    if (lyricsPanelOpen && lyricsSyncEnabled) lyricsSyncRaf = requestAnimationFrame(tick);
-  };
-  lyricsSyncRaf = requestAnimationFrame(tick);
+  lyricsSyncTickTimer = setInterval(updateLyricsSync, LYRICS_SYNC_INTERVAL_MS);
+  updateLyricsSync();
 }
 
 function updateLyricsSync() {
@@ -2938,7 +3005,10 @@ function updateLyricsSync() {
     if (syncedLyrics[i].time <= t + 0.05) activeIdx = i;
     else break;
   }
-  const lineEls = document.querySelectorAll('.lyrics-line');
+  if (activeIdx === lastActiveLyricIdx) return; // nothing changed — skip all DOM work
+  lastActiveLyricIdx = activeIdx;
+  if (!cachedLyricLineEls) cachedLyricLineEls = document.querySelectorAll('.lyrics-line');
+  const lineEls = cachedLyricLineEls;
   if (!lineEls.length) return;
   lineEls.forEach((el, i) => {
     el.classList.toggle('active', i === activeIdx);
@@ -3060,6 +3130,8 @@ function renderLyricsText(text, opts) {
       syncedLyrics.map((l, i) =>
         `<div class="lyrics-line upcoming" data-index="${i}" data-time="${l.time}">${escapeHtml(l.text)}</div>`
       ).join('') + '</div>';
+    cachedLyricLineEls = null;
+    lastActiveLyricIdx = -1;
     bodyEl.querySelectorAll('.lyrics-line').forEach(el => {
       el.onclick = () => seekToLyricLine(parseInt(el.dataset.index, 10));
     });
