@@ -414,7 +414,19 @@
     display: none; align-items: center; justify-content: center;
     z-index: 100;
   }
-  #loadingScreen {
+  #toastStack {
+    position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+    z-index: 300; display: flex; flex-direction: column; gap: 8px; align-items: center;
+    pointer-events: none;
+  }
+  .toast {
+    background: rgba(24,26,30,.97); border: 1px solid rgba(255,255,255,.1);
+    color: var(--text); font-size: 13px; padding: 10px 16px; border-radius: 10px;
+    max-width: min(420px, 86vw); text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+    opacity: 0; transform: translateY(8px); transition: opacity .2s ease, transform .2s ease;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast a { color: var(--accent); }
     position: fixed; inset: 0;
     background: #050608;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -494,7 +506,8 @@
   .switch input:checked + .slider:before { transform: translateX(18px); background: #1a0f1c; }
 
   .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; gap: 10px; }
-  .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+  .quality-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 7px; border-radius: 10px; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  .quality-badge:hover { opacity: 0.8; }
 
   .now-playing {
     cursor: pointer;
@@ -535,6 +548,29 @@
     overflow: hidden;
   }
   .lyrics-panel.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+  .queue-panel {
+    right: auto; left: 0;
+    border-left: none; border-right: 1px solid rgba(255,255,255,.08);
+    box-shadow: 24px 0 60px rgba(0,0,0,.55);
+    transform: translateX(-100%);
+  }
+  .queue-panel.show { transform: translateX(0); }
+  .queue-track {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px; margin-bottom: 4px;
+    cursor: grab;
+  }
+  .queue-track:hover { background: rgba(255,255,255,.05); }
+  .queue-track.dragging { opacity: 0.4; }
+  .queue-track-info { min-width: 0; flex: 1; }
+  .queue-track-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue-track-artist { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .queue-track-remove {
+    background: none; border: none; color: var(--text-dim); cursor: pointer;
+    font-size: 16px; padding: 4px 6px; flex-shrink: 0;
+  }
+  .queue-track-remove:hover { color: var(--danger); }
+  .queue-drag-handle { color: var(--text-dim); font-size: 13px; flex-shrink: 0; cursor: grab; }
   .lyrics-panel-head {
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 22px 28px 16px;
@@ -827,6 +863,8 @@
 </head>
 <body>
 
+<div id="toastStack"></div>
+
 <div id="loadingScreen">
   <div class="logo"><span class="disc"></span>Streamplay</div>
   <div class="loading-sub">Loading your library...</div>
@@ -958,9 +996,9 @@
     </div>
     <div class="controls">
       <div class="buttons">
-        <button title="Previous">&#9198;</button>
+        <button title="Previous" id="prevBtn">&#9198;</button>
         <button class="play-btn" id="playBtn">&#9654;</button>
-        <button title="Next">&#9197;</button>
+        <button title="Next" id="nextBtn">&#9197;</button>
       </div>
       <div class="progress-row">
         <span class="time" id="curTime">0:00</span>
@@ -969,6 +1007,7 @@
       </div>
     </div>
     <div class="volume">
+      <button id="queueToggleBtn" title="Queue" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; padding:4px 6px;">&#9776;</button>
       <span style="font-size:14px;">&#128266;</span>
       <div class="volume-bar" id="volumeBar"><div class="volume-fill" id="volumeFill"></div></div>
     </div>
@@ -982,6 +1021,17 @@
     </div>
   </div>
 
+</div>
+
+<div id="queuePanel" class="lyrics-panel queue-panel">
+  <div class="lyrics-panel-head">
+    <div>
+      <div class="lyrics-panel-title">Queue</div>
+      <div class="lyrics-panel-sub" id="queuePanelSub"></div>
+    </div>
+    <button id="queuePanelClose" class="lyrics-panel-close" title="Close">&times;</button>
+  </div>
+  <div class="lyrics-panel-body" id="queuePanelBody"></div>
 </div>
 
 <div id="lyricsPanel" class="lyrics-panel">
@@ -1292,13 +1342,16 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 const settingsOverlay = document.getElementById('settingsOverlay');
 const settingsBody = document.getElementById('settingsBody');
 
-document.getElementById('settingsGearBtn').onclick = () => {
+function openSettingsTab(tab) {
   if (isGuest || !currentUser) { alert('Log in or sign up to access settings, friends, and listening parties.'); return; }
   settingsOverlay.style.display = 'flex';
   document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.modal-tab[data-tab="profile"]').classList.add('active');
-  renderSettingsTab('profile');
-};
+  const tabBtn = document.querySelector(`.modal-tab[data-tab="${tab}"]`) || document.querySelector('.modal-tab[data-tab="profile"]');
+  tabBtn.classList.add('active');
+  renderSettingsTab(tabBtn.dataset.tab);
+}
+
+document.getElementById('settingsGearBtn').onclick = () => openSettingsTab('profile');
 document.getElementById('closeSettingsBtn').onclick = () => { settingsOverlay.style.display = 'none'; };
 document.querySelectorAll('.modal-tab').forEach(tab => {
   tab.onclick = () => {
@@ -1600,6 +1653,29 @@ function applyEnhanceState() {
   }
   updateQualityBadge();
 }
+/* ---- Lightweight toast notifications (queue confirmations, honest
+   explainers, etc.) — auto-dismiss, stack if more than one is shown. ---- */
+function showToast(html, ms) {
+  const stack = document.getElementById('toastStack');
+  if (!stack) return;
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = html;
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+  }, ms || 3200);
+}
+
+let youtubeEnhanceLimitExplained = false;
+function maybeExplainYoutubeEnhanceLimit() {
+  if (youtubeEnhanceLimitExplained) return;
+  youtubeEnhanceLimitExplained = true;
+  showToast('AI Enhance &amp; Spatial Audio apply to Apple Music/Jamendo tracks — browsers can\'t reprocess audio from YouTube\'s player. It\'ll kick in automatically on your next Apple/Jamendo track.', 5000);
+}
+
 function updateQualityBadge() {
   const badge = document.getElementById('qualityBadge');
   const spatialBadgeEl = document.getElementById('spatialBadge');
@@ -1633,9 +1709,12 @@ function updateQualityBadge() {
     // showing an ENHANCED badge here would be lying. We do still ask
     // YouTube for its best available stream quality.
     badge.textContent = 'HD';
-    badge.title = "Playing at the best available streaming quality.";
+    badge.title = "Playing at the best available streaming quality. AI Enhance can't reach YouTube's audio — tap for details.";
     badge.style.color = 'var(--text-dim)'; badge.style.borderColor = 'var(--border)';
     if (spatialBadgeEl) spatialBadgeEl.style.display = 'none';
+    if (appSettings.aiEnhance || (appSettings.spatialMode && appSettings.spatialMode !== 'off')) {
+      maybeExplainYoutubeEnhanceLimit();
+    }
   } else {
     badge.style.display = 'none';
     if (spatialBadgeEl) spatialBadgeEl.style.display = 'none';
@@ -2038,6 +2117,16 @@ function computeAffinity() {
   return scores; // higher = stronger taste signal
 }
 
+// Top N artists by affinity score, for surfacing "Because you've been
+// listening to..." explanations on the homepage.
+function topAffinityArtists(count) {
+  const scores = computeAffinity();
+  return Object.keys(scores)
+    .filter(a => scores[a] > 0)
+    .sort((a, b) => scores[b] - scores[a])
+    .slice(0, count || 3);
+}
+
 /* Weighted "signal strength" used only to decide the trending/personalized
    ratio — plays/likes/adds count, passive searches count less. */
 function signalStrength() {
@@ -2368,6 +2457,8 @@ function renderHome() {
   const personalized = personalizedPicks(pool, 8);
   const genrePrefs = loadGenrePrefs();
   const showGenreSeed = personalized.length === 0 && genrePrefs && genrePrefs.length > 0;
+  const recentlyPlayed = loadHistory().slice(0, 8);
+  const topArtists = topAffinityArtists(3);
 
   mainContent.innerHTML = `
     <div class="add-panel" style="display:flex; justify-content:space-between; align-items:center; gap:16px;">
@@ -2380,6 +2471,11 @@ function renderHome() {
     <div id="aiRecommendStatus" class="add-status" style="margin:-14px 0 14px;"></div>
     <div class="result-grid" id="aiRecommendGrid"></div>
 
+    ${recentlyPlayed.length ? `
+      <h2 class="section-title">Recently played</h2>
+      <div class="track-list" id="recentlyPlayedList"></div>
+    ` : ''}
+
     <h2 class="section-title">People are playing right now</h2>
     <div class="track-list" id="topPlayedList">
       ${Array.from({ length: 5 }).map(() => `<div class="track-row"><div class="skeleton-shimmer" style="height:14px; border-radius:4px; width:100%;"></div></div>`).join('')}
@@ -2387,6 +2483,7 @@ function renderHome() {
 
     ${personalized.length ? `
       <h2 class="section-title">Your mix</h2>
+      ${topArtists.length ? `<p class="card-sub" style="margin:-10px 0 12px;">Because you've been listening to ${topArtists.map(escapeHtml).join(', ')}</p>` : ''}
       <div class="track-list" id="trackList"></div>
     ` : ''}
 
@@ -2417,6 +2514,7 @@ function renderHome() {
   `;
 
   if (personalized.length) renderTrackList(document.getElementById('trackList'), personalized);
+  if (recentlyPlayed.length) renderTrackList(document.getElementById('recentlyPlayedList'), recentlyPlayed);
   document.getElementById('aiRecommendBtn').onclick = fetchAIRecommendations;
 
   fetchTopPlayed().then(tracks => {
@@ -2925,15 +3023,19 @@ function renderTrackList(container, list, opts) {
         ${sourceLabel ? `<span class="track-source">${sourceLabel}</span>` : ''}
         ${canDownload ? `<button class="track-remove download-btn" title="${downloaded ? 'Downloaded — tap to remove' : 'Download for offline'}">${downloaded ? '&#10003;' : '&#11015;'}</button>` : ''}
         <button class="track-remove like-btn" title="Like">${liked ? '♥' : '♡'}</button>
+        <button class="track-remove playnext-btn" title="Play next">&#10148;</button>
+        <button class="track-remove queue-btn" title="Add to queue">&#9776;</button>
         <button class="track-remove playlist-add-btn" title="Add to playlist">&#43;</button>
         ${opts.removable ? `<button class="track-remove remove-btn" title="Remove">&times;</button>` : ''}
       </span>
     `;
     row.addEventListener('click', (e) => {
-      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.download-btn')) return;
+      if (e.target.closest('.like-btn') || e.target.closest('.remove-btn') || e.target.closest('.playlist-add-btn') || e.target.closest('.download-btn') || e.target.closest('.playnext-btn') || e.target.closest('.queue-btn')) return;
       playTrack(t);
     });
     row.querySelector('.like-btn').onclick = (e) => { e.stopPropagation(); toggleLike(t.id); };
+    row.querySelector('.playnext-btn').onclick = (e) => { e.stopPropagation(); playNextInQueue(t); };
+    row.querySelector('.queue-btn').onclick = (e) => { e.stopPropagation(); addToQueue(t); };
     row.querySelector('.playlist-add-btn').onclick = (e) => { e.stopPropagation(); openPlaylistMenu(e.currentTarget, t.id); };
     if (canDownload) {
       row.querySelector('.download-btn').onclick = (e) => { e.stopPropagation(); toggleDownload(t, e.currentTarget); };
@@ -2996,9 +3098,13 @@ let showingTranslation = false;
    prefers that over the (often auto-generated) channel name. */
 function cleanForLyrics(str) {
   return (str || '')
-    .replace(/\((?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered)[^)]*\)/gi, '')
-    .replace(/\[(?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered)[^\]]*\]/gi, '')
-    .replace(/\b(official\s*(music\s*)?video|official\s*audio|lyric\s*video|visualizer|remastered|hd|hq|4k)\b/gi, '')
+    .replace(/\((?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered|remix|cover|acoustic|live|slowed|reverb|sped up|nightcore|karaoke|instrumental|mv|full audio|clean|explicit)[^)]*\)/gi, '')
+    .replace(/\[(?:official|lyric|lyrics|audio|video|music video|hd|hq|4k|visualizer|remastered|remix|cover|acoustic|live|slowed|reverb|sped up|nightcore|karaoke|instrumental|mv|vietsub|engsub|lyric video|full audio|clean|explicit)[^\]]*\]/gi, '')
+    .replace(/【[^】]*】/g, '') // Japanese/Korean-style bracket tags, e.g. 【MV】
+    .replace(/『[^』]*』/g, '')
+    .replace(/\b(official\s*(music\s*)?video|official\s*audio|lyric\s*video|lyrics\s*video|visualizer|remastered|hd|hq|4k|mv|full\s*audio|karaoke\s*version|instrumental\s*version)\b/gi, '')
+    .replace(/\b(remix|cover|acoustic( version)?|slowed( \+? ?reverb)?|sped ?up|nightcore|live( performance| version)?|karaoke|vietsub|engsub|explicit|clean( version)?)\b/gi, '')
+    .replace(/\bprod\.?\s*(by\s*)?.+$/i, '')
     .replace(/\bft\.?\s.+$/i, '')
     .replace(/\bfeat\.?\s.+$/i, '')
     .replace(/\s*-\s*topic$/i, '')
@@ -3008,17 +3114,49 @@ function cleanForLyrics(str) {
     .trim();
 }
 
+// Strips diacritics (e.g. Vietnamese "Ai Đưa Em Về" -> "Ai Dua Em Ve") — some
+// lyrics databases only index the unaccented form, so this gives us one more
+// thing to try when the accented lookup comes up empty.
+function stripDiacritics(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, m => m === 'đ' ? 'd' : 'D');
+}
+
+// If a title lists multiple artists ("A, B & C", "A x B", "A feat. B"),
+// the primary artist alone often matches a lyrics database better than the
+// full credit line.
+function primaryArtist(artist) {
+  const m = (artist || '').split(/,| x |&|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b/i);
+  return m[0] ? m[0].trim() : artist;
+}
+
 function lyricsCandidates(track) {
   const cleanTitle = cleanForLyrics(track.name);
   const cleanArtist = cleanForLyrics(track.artist);
   const candidates = [{ artist: cleanArtist, title: cleanTitle }];
   // If the title itself looks like "Artist - Song", that's usually more
   // reliable than the channel name (which may be a label/aggregator).
-  const splitMatch = cleanTitle.match(/^(.+?)\s*-\s*(.+)$/);
+  const splitMatch = cleanTitle.match(/^(.+?)\s*[-–—]\s*(.+)$/);
   if (splitMatch) candidates.push({ artist: splitMatch[1].trim(), title: splitMatch[2].trim() });
+  // Multi-artist credits ("A, B & C") — try just the primary artist.
+  const primary = primaryArtist(cleanArtist);
+  if (primary && primary !== cleanArtist) candidates.push({ artist: primary, title: cleanTitle });
+  // Diacritics-stripped variant — some lyrics DBs only index the unaccented
+  // form, which matters a lot for Vietnamese and other accented scripts.
+  const strippedArtist = stripDiacritics(primary || cleanArtist);
+  const strippedTitle = stripDiacritics(cleanTitle);
+  if (strippedArtist !== (primary || cleanArtist) || strippedTitle !== cleanTitle) {
+    candidates.push({ artist: strippedArtist, title: strippedTitle });
+  }
   // Fall back to the raw, uncleaned fields as a last resort.
   candidates.push({ artist: track.artist, title: track.name });
-  return candidates;
+  // De-dupe (case-insensitive) so we don't hit the same lookup twice.
+  const seen = new Set();
+  return candidates.filter(c => {
+    const key = (c.artist + '|||' + c.title).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function fetchLyricsOnce(artist, title) {
@@ -3473,7 +3611,11 @@ function setLyricsPanelOpen(open) {
   }
 }
 
-document.getElementById('nowPlaying').onclick = () => {
+document.getElementById('nowPlaying').onclick = (e) => {
+  if (e.target.closest('#qualityBadge') || e.target.closest('#spatialBadge')) {
+    openSettingsTab('audio');
+    return;
+  }
   if (!current) return;
   setLyricsPanelOpen(!lyricsPanelOpen);
 };
@@ -3534,6 +3676,109 @@ async function youtubeQuickSearch(query, maxResults) {
    resolve the first one to an actual playable YouTube result. Falls back
    to trending/personalized picks if there's no login, no history yet, or
    the edge function is unreachable — autoplay should never just go dead. */
+/* ---- Manual "up next" queue ----
+   Distinct from aiQueue below (which is autoplay's own AI-fed pipeline).
+   Anything the user explicitly adds here always plays before autoplay
+   picks anything, regardless of the autoplay setting. In-memory only,
+   like Spotify/Apple Music's queue — it doesn't need to survive a reload. */
+let manualQueue = []; // [{ ...track }]
+
+function addToQueue(track) {
+  manualQueue.push(track);
+  renderQueuePanel();
+  showToast(`Added to queue: ${escapeHtml(track.name)}`, 2000);
+}
+
+function playNextInQueue(track) {
+  manualQueue.unshift(track);
+  renderQueuePanel();
+  showToast(`Playing next: ${escapeHtml(track.name)}`, 2000);
+}
+
+function removeFromQueue(index) {
+  manualQueue.splice(index, 1);
+  renderQueuePanel();
+}
+
+function reorderQueue(fromIndex, toIndex) {
+  const [item] = manualQueue.splice(fromIndex, 1);
+  manualQueue.splice(toIndex, 0, item);
+  renderQueuePanel();
+}
+
+function renderQueuePanel() {
+  const bodyEl = document.getElementById('queuePanelBody');
+  const subEl = document.getElementById('queuePanelSub');
+  if (!bodyEl) return;
+  subEl.textContent = manualQueue.length ? `${manualQueue.length} track${manualQueue.length === 1 ? '' : 's'} up next` : '';
+
+  const nowPlayingHtml = current ? `
+    <h2 class="section-title" style="font-size:13px; margin:0 0 10px;">Playing now</h2>
+    <div class="queue-track" style="cursor:default;">
+      <div class="queue-track-info">
+        <div class="queue-track-name">${escapeHtml(current.name)}</div>
+        <div class="queue-track-artist">${escapeHtml(current.artist)}</div>
+      </div>
+    </div>
+  ` : '';
+
+  if (!manualQueue.length) {
+    bodyEl.innerHTML = nowPlayingHtml + `
+      <h2 class="section-title" style="font-size:13px; margin:18px 0 10px;">Next up</h2>
+      <p class="empty-state" style="margin:0;">Nothing queued — use "Add to queue" or "Play next" on any track.</p>
+    `;
+    return;
+  }
+
+  bodyEl.innerHTML = nowPlayingHtml + `
+    <h2 class="section-title" style="font-size:13px; margin:18px 0 10px;">Next up</h2>
+    <div id="queueTrackList"></div>
+  `;
+
+  const listEl = document.getElementById('queueTrackList');
+  manualQueue.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'queue-track';
+    row.draggable = true;
+    row.dataset.index = String(i);
+    row.innerHTML = `
+      <span class="queue-drag-handle">&#8942;&#8942;</span>
+      <div class="queue-track-info">
+        <div class="queue-track-name">${escapeHtml(t.name)}</div>
+        <div class="queue-track-artist">${escapeHtml(t.artist)}</div>
+      </div>
+      <button class="queue-track-remove" title="Remove from queue">&times;</button>
+    `;
+    row.querySelector('.queue-track-remove').onclick = (e) => { e.stopPropagation(); removeFromQueue(i); };
+    row.addEventListener('dragstart', (e) => {
+      row.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', String(i));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragover', (e) => e.preventDefault());
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const toIndex = parseInt(row.dataset.index, 10);
+      if (!Number.isNaN(fromIndex) && !Number.isNaN(toIndex) && fromIndex !== toIndex) {
+        reorderQueue(fromIndex, toIndex);
+      }
+    });
+    listEl.appendChild(row);
+  });
+}
+
+function setQueuePanelOpen(open) {
+  document.getElementById('queuePanel').classList.toggle('show', open);
+  if (open) renderQueuePanel();
+}
+
+document.getElementById('queueToggleBtn').onclick = () => {
+  setQueuePanelOpen(!document.getElementById('queuePanel').classList.contains('show'));
+};
+document.getElementById('queuePanelClose').onclick = () => setQueuePanelOpen(false);
+
 let aiQueue = [];
 let aiQueueIndex = 0;
 
@@ -3566,8 +3811,10 @@ async function getNextAutoplayTrack() {
   return null;
 }
 
-async function handleTrackEnded() {
-  if (!appSettings.autoplay) return;
+/* Resolves what should play after the current track, trying AI-recommended
+   autoplay picks, then trending, then personalized picks — used both when
+   a track ends naturally and when the user taps Next with an empty queue. */
+async function resolveAutoplayNext() {
   let next = null;
   if (currentUser && !isGuest) next = await getNextAutoplayTrack();
   if (!next && trendingResults && trendingResults.length) {
@@ -3578,7 +3825,49 @@ async function handleTrackEnded() {
     const pool = personalizedPicks(allTracks().concat(loadHistory()), 10).filter(t => !current || t.id !== current.id);
     if (pool.length) next = pool[Math.floor(Math.random() * pool.length)];
   }
+  return next;
+}
+
+async function handleTrackEnded() {
+  if (manualQueue.length) {
+    const next = manualQueue.shift();
+    renderQueuePanel();
+    playTrack(next);
+    return;
+  }
+  if (!appSettings.autoplay) return;
+  const next = await resolveAutoplayNext();
   if (next) playTrack(next);
+}
+
+/* Manual "Next" button press — always advances (unlike the end-of-track
+   handler, this isn't gated by the autoplay setting, since tapping Next
+   is an explicit request, not autoplay continuing on its own). */
+async function goToNextTrack() {
+  if (manualQueue.length) {
+    const next = manualQueue.shift();
+    renderQueuePanel();
+    playTrack(next);
+    return;
+  }
+  const next = await resolveAutoplayNext();
+  if (next) playTrack(next);
+}
+
+/* Manual "Previous" button press — restarts the current track if we're
+   more than 3s in (matches Spotify/Apple Music convention), otherwise
+   replays whatever's right before the current track in history. */
+function goToPreviousTrack() {
+  const t = getCurrentPlaybackTime();
+  if (current && t > 3) {
+    if (current.source === 'youtube' && ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(0, true);
+    else if (current.source === 'apple' || current.source === 'jamendo') appleAudio.currentTime = 0;
+    else if (current.source === 'local') { mockElapsed = 0; curTimeEl.textContent = formatTime(0); progressFill.style.width = '0%'; }
+    return;
+  }
+  const hist = loadHistory();
+  const prev = hist.find(h => !current || h.id !== current.id);
+  if (prev) playTrack(prev);
 }
 
 function onYTStateChange(e) {
@@ -3783,6 +4072,8 @@ function setPlaying(state) {
 }
 
 playBtn.onclick = () => { if (current) setPlaying(!playing); };
+document.getElementById('nextBtn').onclick = () => { if (current) goToNextTrack(); };
+document.getElementById('prevBtn').onclick = () => { if (current) goToPreviousTrack(); };
 
 document.getElementById('progressBar').onclick = (e) => {
   if (!current) return;
